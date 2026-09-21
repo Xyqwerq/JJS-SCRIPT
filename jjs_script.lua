@@ -1,11 +1,12 @@
 --// ============================================
---// JJS Script v13 — Anti-Cheat Safe Pathfinding
+--// JJS Script v14 for Delta Executor
+--// + Fixed AutoFarm | + Pathfinding | + AutoSafeZone | + AutoServerHop
 --// Made by Xyqwerq
 --// ============================================
 
---// ============ ЗАЩИТА ОТ ПОВТОРНОГО ЗАПУСКА ============
+--// ============ ANTI-DUPLICATE ============
 if _G.JJS_SCRIPT_LOADED then
-    warn("[JJS Script] Уже запущен! Удаляю старый экземпляр...")
+    warn("[JJS Script] Already running! Cleaning old instance...")
     if _G.JJS_CLEANUP then pcall(_G.JJS_CLEANUP) end
 end
 _G.JJS_SCRIPT_LOADED = true
@@ -16,11 +17,13 @@ local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
 local VirtualUser = game:GetService("VirtualUser")
 local VirtualInputManager = game:GetService("VirtualInputManager")
+local HttpService = game:GetService("HttpService")
+local TeleportService = game:GetService("TeleportService")
 local PathfindingService = game:GetService("PathfindingService")
 local LocalPlayer = Players.LocalPlayer
 local Mouse = LocalPlayer:GetMouse()
 
---// ============ ЦВЕТА ============
+--// ============ THEME ============
 local THEME = {
     Background     = Color3.fromRGB(35, 35, 40),
     BackgroundDark = Color3.fromRGB(28, 28, 33),
@@ -32,29 +35,49 @@ local THEME = {
     ButtonOn       = Color3.fromRGB(120, 50, 200),
     Green          = Color3.fromRGB(90, 255, 130),
     Red            = Color3.fromRGB(255, 90, 90),
+    Yellow         = Color3.fromRGB(255, 200, 80),
     Credit         = Color3.fromRGB(180, 120, 255),
     DropdownBg     = Color3.fromRGB(45, 45, 52),
+    InputBg        = Color3.fromRGB(45, 45, 52),
 }
 
 local HOTKEY = Enum.KeyCode.RightShift
-local GUI_W = 240
-local GUI_H = 350
-local MIN_WIDTH = 210
-local MIN_HEIGHT = 320
+local GUI_W = 270
+local GUI_H = 640
+local MIN_WIDTH = 240
+local MIN_HEIGHT = 500
 
---// ============ НАСТРОЙКИ AUTOFARM ============
+--// ============ AUTOFARM CONFIG ============
 local CONFIG = {
     FOLLOW_DISTANCE = 1.5,
-    STEP_INTERVAL   = 0.05,
-    STEP_SPEED      = 0.35,
-    MAX_STEP        = 3,
+    STEP_INTERVAL   = 0.04,
+    STEP_SPEED      = 0.45,
+    MAX_STEP        = 2,
     DEADZONE        = 1,
     JUMP_ON_STUCK   = true,
-    WALL_CHECK      = true,    -- ✅ проверка стен через raycast
-    REPATH_INTERVAL = 0.4,
+    REPATH_INTERVAL = 0.35,
+    WAYPOINT_REACH  = 4,
 }
 
---// ============ УДАЛЯЕМ СТАРЫЕ GUI ============
+--// ============ SAFE ZONE CONFIG ============
+local SafeZoneConfig = {
+    Enabled = false,
+    MinHP   = 30,
+    MaxHP   = 90,
+    Position = Vector3.new(0, -500, 0),
+    InSafeZone = false,
+    ReturnPos = nil,
+}
+
+--// ============ SERVER HOP CONFIG ============
+local ServerHopConfig = {
+    Enabled = false,
+    MinPlayers = 3,
+    CheckInterval = 15,
+    LastHop = 0,
+}
+
+--// ============ REMOVE OLD GUI ============
 for _, name in ipairs({"JJSScriptGui", "JJSTargetHud"}) do
     if game.CoreGui:FindFirstChild(name) then
         game.CoreGui[name]:Destroy()
@@ -62,7 +85,7 @@ for _, name in ipairs({"JJSScriptGui", "JJSTargetHud"}) do
 end
 
 --// ============================================
---// ГЛАВНОЕ GUI
+--// MAIN GUI
 --// ============================================
 local ScreenGui = Instance.new("ScreenGui")
 ScreenGui.Name = "JJSScriptGui"
@@ -94,7 +117,7 @@ DragBar.Size = UDim2.new(1, -50, 0, 22)
 DragBar.BackgroundColor3 = THEME.BackgroundDark
 DragBar.BackgroundTransparency = 1
 DragBar.BorderSizePixel = 0
-DragBar.Text = "JJS Script v13"
+DragBar.Text = "JJS Script v14"
 DragBar.TextColor3 = THEME.Accent
 DragBar.Font = Enum.Font.GothamBold
 DragBar.TextSize = 11
@@ -105,6 +128,7 @@ local DragBarCorner = Instance.new("UICorner")
 DragBarCorner.CornerRadius = UDim.new(0, 10)
 DragBarCorner.Parent = DragBar
 
+--// CLOSE
 local CloseBtn = Instance.new("TextButton")
 CloseBtn.Size = UDim2.new(0, 20, 0, 20)
 CloseBtn.Position = UDim2.new(1, -24, 0, 2)
@@ -129,6 +153,7 @@ CloseBtn.MouseLeave:Connect(function()
     TweenService:Create(CloseBtn, TweenInfo.new(0.15), {BackgroundColor3 = THEME.ButtonOff}):Play()
 end)
 
+--// RESIZE
 local resizing = false
 local resizeStart, resizeStartSize
 
@@ -178,9 +203,22 @@ ResizeHandle.InputBegan:Connect(function(input)
     end
 end)
 
+--// SCROLLING CONTENT
+local ScrollFrame = Instance.new("ScrollingFrame")
+ScrollFrame.Size = UDim2.new(1, 0, 1, -50)
+ScrollFrame.Position = UDim2.new(0, 0, 0, 26)
+ScrollFrame.BackgroundTransparency = 1
+ScrollFrame.BorderSizePixel = 0
+ScrollFrame.ScrollBarThickness = 3
+ScrollFrame.ScrollBarImageColor3 = THEME.Stroke
+ScrollFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
+ScrollFrame.AutomaticCanvasSize = Enum.AutomaticSize.Y
+ScrollFrame.Parent = MainFrame
+
+--// HEADER LABELS
 local HelloLabel = Instance.new("TextLabel")
 HelloLabel.Size = UDim2.new(1, -20, 0, 26)
-HelloLabel.Position = UDim2.new(0, 10, 0, 28)
+HelloLabel.Position = UDim2.new(0, 10, 0, 2)
 HelloLabel.BackgroundTransparency = 1
 HelloLabel.Text = ""
 HelloLabel.TextColor3 = THEME.Text
@@ -188,11 +226,11 @@ HelloLabel.Font = Enum.Font.GothamBold
 HelloLabel.TextSize = 16
 HelloLabel.TextTransparency = 1
 HelloLabel.TextXAlignment = Enum.TextXAlignment.Center
-HelloLabel.Parent = MainFrame
+HelloLabel.Parent = ScrollFrame
 
 local StatusLabel = Instance.new("TextLabel")
 StatusLabel.Size = UDim2.new(1, -20, 0, 12)
-StatusLabel.Position = UDim2.new(0, 10, 0, 56)
+StatusLabel.Position = UDim2.new(0, 10, 0, 30)
 StatusLabel.BackgroundTransparency = 1
 StatusLabel.Text = ""
 StatusLabel.TextColor3 = THEME.SubText
@@ -200,11 +238,11 @@ StatusLabel.Font = Enum.Font.Gotham
 StatusLabel.TextSize = 10
 StatusLabel.TextTransparency = 1
 StatusLabel.TextXAlignment = Enum.TextXAlignment.Center
-StatusLabel.Parent = MainFrame
+StatusLabel.Parent = ScrollFrame
 
 local ScanLabel = Instance.new("TextLabel")
 ScanLabel.Size = UDim2.new(1, -20, 0, 12)
-ScanLabel.Position = UDim2.new(0, 10, 0, 70)
+ScanLabel.Position = UDim2.new(0, 10, 0, 44)
 ScanLabel.BackgroundTransparency = 1
 ScanLabel.Text = ""
 ScanLabel.TextColor3 = THEME.Text
@@ -212,8 +250,9 @@ ScanLabel.Font = Enum.Font.GothamMedium
 ScanLabel.TextSize = 10
 ScanLabel.TextTransparency = 1
 ScanLabel.TextXAlignment = Enum.TextXAlignment.Center
-ScanLabel.Parent = MainFrame
+ScanLabel.Parent = ScrollFrame
 
+--// ============ UI HELPERS ============
 local function makeSeparator(y)
     local sep = Instance.new("Frame")
     sep.Size = UDim2.new(1, -20, 0, 1)
@@ -221,60 +260,80 @@ local function makeSeparator(y)
     sep.BackgroundColor3 = THEME.Stroke
     sep.BackgroundTransparency = 1
     sep.BorderSizePixel = 0
-    sep.Parent = MainFrame
+    sep.Parent = ScrollFrame
     return sep
 end
-local Sep1 = makeSeparator(90)
 
-local AutoFarmBtn = Instance.new("TextButton")
-AutoFarmBtn.Size = UDim2.new(1, -20, 0, 28)
-AutoFarmBtn.Position = UDim2.new(0, 10, 0, 100)
-AutoFarmBtn.BackgroundColor3 = THEME.ButtonOff
-AutoFarmBtn.Text = "Enable AutoFarm"
-AutoFarmBtn.TextColor3 = THEME.Text
-AutoFarmBtn.Font = Enum.Font.GothamBold
-AutoFarmBtn.TextSize = 11
-AutoFarmBtn.TextTransparency = 1
-AutoFarmBtn.BackgroundTransparency = 1
-AutoFarmBtn.AutoButtonColor = false
-AutoFarmBtn.Parent = MainFrame
+local function makeButton(text, y, height)
+    local btn = Instance.new("TextButton")
+    btn.Size = UDim2.new(1, -20, 0, height or 28)
+    btn.Position = UDim2.new(0, 10, 0, y)
+    btn.BackgroundColor3 = THEME.ButtonOff
+    btn.Text = text
+    btn.TextColor3 = THEME.Text
+    btn.Font = Enum.Font.GothamBold
+    btn.TextSize = 11
+    btn.TextTransparency = 1
+    btn.BackgroundTransparency = 1
+    btn.AutoButtonColor = false
+    btn.Parent = ScrollFrame
+    local c = Instance.new("UICorner"); c.CornerRadius = UDim.new(0, 6); c.Parent = btn
+    local s = Instance.new("UIStroke"); s.Color = THEME.Stroke; s.Thickness = 1; s.Transparency = 1; s.Parent = btn
+    btn.MouseEnter:Connect(function()
+        TweenService:Create(btn, TweenInfo.new(0.2), {BackgroundColor3 = Color3.fromRGB(75, 75, 90)}):Play()
+    end)
+    btn.MouseLeave:Connect(function()
+        TweenService:Create(btn, TweenInfo.new(0.2), {BackgroundColor3 = THEME.ButtonOff}):Play()
+    end)
+    return btn, s
+end
 
-local BtnCorner = Instance.new("UICorner")
-BtnCorner.CornerRadius = UDim.new(0, 6)
-BtnCorner.Parent = AutoFarmBtn
+local function makeLabel(text, y, color, size)
+    local lbl = Instance.new("TextLabel")
+    lbl.Size = UDim2.new(1, -20, 0, 14)
+    lbl.Position = UDim2.new(0, 10, 0, y)
+    lbl.BackgroundTransparency = 1
+    lbl.Text = text
+    lbl.TextColor3 = color or THEME.Accent
+    lbl.Font = Enum.Font.GothamBold
+    lbl.TextSize = size or 11
+    lbl.TextTransparency = 1
+    lbl.TextXAlignment = Enum.TextXAlignment.Left
+    lbl.Parent = ScrollFrame
+    return lbl
+end
 
-local BtnStroke = Instance.new("UIStroke")
-BtnStroke.Color = THEME.Stroke
-BtnStroke.Thickness = 1
-BtnStroke.Transparency = 1
-BtnStroke.Parent = AutoFarmBtn
+local function makeInput(placeholder, y, default)
+    local box = Instance.new("TextBox")
+    box.Size = UDim2.new(0.5, -15, 0, 26)
+    box.Position = UDim2.new(0, 10, 0, y)
+    box.BackgroundColor3 = THEME.InputBg
+    box.BackgroundTransparency = 1
+    box.Text = default or ""
+    box.PlaceholderText = placeholder
+    box.TextColor3 = THEME.Text
+    box.PlaceholderColor3 = Color3.fromRGB(150, 150, 160)
+    box.Font = Enum.Font.GothamMedium
+    box.TextSize = 11
+    box.TextTransparency = 1
+    box.PlaceholderColor3 = Color3.fromRGB(150, 150, 160)
+    box.AutoButtonColor = false
+    box.ClearTextOnFocus = false
+    box.Parent = ScrollFrame
+    local c = Instance.new("UICorner"); c.CornerRadius = UDim.new(0, 6); c.Parent = box
+    local s = Instance.new("UIStroke"); s.Color = THEME.Stroke; s.Thickness = 1; s.Transparency = 1; s.Parent = box
+    return box, s
+end
 
-local AutoAttackBtn = Instance.new("TextButton")
-AutoAttackBtn.Size = UDim2.new(1, -20, 0, 28)
-AutoAttackBtn.Position = UDim2.new(0, 10, 0, 134)
-AutoAttackBtn.BackgroundColor3 = THEME.ButtonOff
-AutoAttackBtn.Text = "Enable AutoAttack"
-AutoAttackBtn.TextColor3 = THEME.Text
-AutoAttackBtn.Font = Enum.Font.GothamBold
-AutoAttackBtn.TextSize = 11
-AutoAttackBtn.TextTransparency = 1
-AutoAttackBtn.BackgroundTransparency = 1
-AutoAttackBtn.AutoButtonColor = false
-AutoAttackBtn.Parent = MainFrame
+--// ============ MAIN BUTTONS ============
+local Sep1 = makeSeparator(64)
 
-local Btn2Corner = Instance.new("UICorner")
-Btn2Corner.CornerRadius = UDim.new(0, 6)
-Btn2Corner.Parent = AutoAttackBtn
-
-local Btn2Stroke = Instance.new("UIStroke")
-Btn2Stroke.Color = THEME.Stroke
-Btn2Stroke.Thickness = 1
-Btn2Stroke.Transparency = 1
-Btn2Stroke.Parent = AutoAttackBtn
+local AutoFarmBtn, AutoFarmStroke = makeButton("Enable AutoFarm", 74, 28)
+local AutoAttackBtn, AutoAttackStroke = makeButton("Enable AutoAttack", 108, 28)
 
 local ToggleStatus = Instance.new("TextLabel")
 ToggleStatus.Size = UDim2.new(1, -20, 0, 12)
-ToggleStatus.Position = UDim2.new(0, 10, 0, 168)
+ToggleStatus.Position = UDim2.new(0, 10, 0, 142)
 ToggleStatus.BackgroundTransparency = 1
 ToggleStatus.Text = "AutoFarm: OFF  |  AutoAttack: OFF"
 ToggleStatus.TextColor3 = THEME.Red
@@ -282,25 +341,16 @@ ToggleStatus.Font = Enum.Font.Gotham
 ToggleStatus.TextSize = 9
 ToggleStatus.TextTransparency = 1
 ToggleStatus.TextXAlignment = Enum.TextXAlignment.Center
-ToggleStatus.Parent = MainFrame
+ToggleStatus.Parent = ScrollFrame
 
-local Sep2 = makeSeparator(184)
+local Sep2 = makeSeparator(158)
 
-local TargetTitle = Instance.new("TextLabel")
-TargetTitle.Size = UDim2.new(1, -20, 0, 14)
-TargetTitle.Position = UDim2.new(0, 10, 0, 192)
-TargetTitle.BackgroundTransparency = 1
-TargetTitle.Text = "Target Selector"
-TargetTitle.TextColor3 = THEME.Accent
-TargetTitle.Font = Enum.Font.GothamBold
-TargetTitle.TextSize = 11
-TargetTitle.TextTransparency = 1
-TargetTitle.TextXAlignment = Enum.TextXAlignment.Left
-TargetTitle.Parent = MainFrame
+--// TARGET SELECTOR
+local TargetTitle = makeLabel("Target Selector", 168)
 
 local TargetDropdown = Instance.new("TextButton")
 TargetDropdown.Size = UDim2.new(1, -20, 0, 26)
-TargetDropdown.Position = UDim2.new(0, 10, 0, 210)
+TargetDropdown.Position = UDim2.new(0, 10, 0, 186)
 TargetDropdown.BackgroundColor3 = THEME.ButtonOff
 TargetDropdown.Text = "Auto (Nearest)"
 TargetDropdown.TextColor3 = THEME.Text
@@ -309,7 +359,7 @@ TargetDropdown.TextSize = 11
 TargetDropdown.TextTransparency = 1
 TargetDropdown.BackgroundTransparency = 1
 TargetDropdown.AutoButtonColor = false
-TargetDropdown.Parent = MainFrame
+TargetDropdown.Parent = ScrollFrame
 
 local DDCorner = Instance.new("UICorner")
 DDCorner.CornerRadius = UDim.new(0, 6)
@@ -334,7 +384,7 @@ DDArrow.Parent = TargetDropdown
 
 local DropdownList = Instance.new("ScrollingFrame")
 DropdownList.Size = UDim2.new(1, -20, 0, 0)
-DropdownList.Position = UDim2.new(0, 10, 0, 240)
+DropdownList.Position = UDim2.new(0, 10, 0, 216)
 DropdownList.BackgroundColor3 = THEME.DropdownBg
 DropdownList.BackgroundTransparency = 1
 DropdownList.BorderSizePixel = 0
@@ -343,7 +393,7 @@ DropdownList.ScrollBarThickness = 3
 DropdownList.ScrollBarImageColor3 = THEME.Stroke
 DropdownList.Visible = false
 DropdownList.ZIndex = 10
-DropdownList.Parent = MainFrame
+DropdownList.Parent = ScrollFrame
 
 local DDListCorner = Instance.new("UICorner")
 DDListCorner.CornerRadius = UDim.new(0, 6)
@@ -360,6 +410,32 @@ UIListLayout.Padding = UDim.new(0, 2)
 UIListLayout.SortOrder = Enum.SortOrder.LayoutOrder
 UIListLayout.Parent = DropdownList
 
+local Sep3 = makeSeparator(250)
+
+--// ============ SAFE ZONE SECTION ============
+local SafeZoneTitle = makeLabel("Auto Safe Zone", 260)
+
+local SafeZoneBtn, SafeZoneStroke = makeButton("Enable Auto Safe Zone", 278, 28)
+
+local MinHPLabel = makeLabel("Min HP (teleport to safe zone):", 312, THEME.SubText, 10)
+local MinHPInput, MinHPStroke = makeInput("30", 328, "30")
+
+local MaxHPLabel = makeLabel("Max HP (return from safe zone):", 358, THEME.SubText, 10)
+local MaxHPInput, MaxHPStroke = makeInput("90", 374, "90")
+
+local Sep4 = makeSeparator(408)
+
+--// ============ SERVER HOP SECTION ============
+local ServerHopTitle = makeLabel("Auto Server Hop", 418)
+
+local ServerHopBtn, ServerHopStroke = makeButton("Enable Auto Server Hop", 436, 28)
+
+local MinPlayersLabel = makeLabel("Hop when players count below:", 470, THEME.SubText, 10)
+local MinPlayersInput, MinPlayersStroke = makeInput("3", 486, "3")
+
+local Sep5 = makeSeparator(520)
+
+--// ============ FOOTER (fixed) ============
 local CreditLabel = Instance.new("TextLabel")
 CreditLabel.Size = UDim2.new(1, 0, 0, 14)
 CreditLabel.Position = UDim2.new(0, 0, 1, -32)
@@ -376,7 +452,7 @@ local Footer = Instance.new("TextLabel")
 Footer.Size = UDim2.new(1, 0, 0, 12)
 Footer.Position = UDim2.new(0, 0, 1, -18)
 Footer.BackgroundTransparency = 1
-Footer.Text = "[RightShift] • AntiKick ON • v13"
+Footer.Text = "[RightShift] Hide • AntiKick ON • v14"
 Footer.TextColor3 = Color3.fromRGB(120, 120, 130)
 Footer.Font = Enum.Font.Gotham
 Footer.TextSize = 9
@@ -410,7 +486,9 @@ DockStroke.Thickness = 1.5
 DockStroke.Transparency = 1
 DockStroke.Parent = DockBtn
 
---// HUD
+--// ============================================
+--// TARGET HUD
+--// ============================================
 local TargetHud = Instance.new("ScreenGui")
 TargetHud.Name = "JJSTargetHud"
 TargetHud.ResetOnSpawn = false
@@ -492,7 +570,7 @@ HudHpText.TextXAlignment = Enum.TextXAlignment.Left
 HudHpText.Parent = HudFrame
 
 --// ============================================
---// ЛОГИКА
+--// LOGIC
 --// ============================================
 local AutoFarmEnabled = false
 local AutoAttackEnabled = false
@@ -559,13 +637,14 @@ local function updateHud()
     if ratio > 0.6 then
         HudHpFill.BackgroundColor3 = THEME.Green
     elseif ratio > 0.3 then
-        HudHpFill.BackgroundColor3 = Color3.fromRGB(255, 200, 80)
+        HudHpFill.BackgroundColor3 = THEME.Yellow
     else
         HudHpFill.BackgroundColor3 = THEME.Red
     end
     HudAvatar.Image = "https://www.roblox.com/headshot-thumbnail/image?userId=" .. CurrentTarget.UserId .. "&width=150&height=150&format=png"
 end
 
+-- Target switching on death
 task.spawn(function()
     while true do
         task.wait(0.3)
@@ -584,7 +663,7 @@ task.spawn(function()
 end)
 
 --// ============================================
---// 🚀 AUTOFARM v13 — Anti-Cheat Safe
+--// 🚀 AUTOFARM (v12 logic + Pathfinding fallback)
 --// ============================================
 local stuckTimer = 0
 local lastPos = nil
@@ -592,16 +671,6 @@ local currentPath = nil
 local currentWaypointIndex = 1
 local lastRepathTime = 0
 
--- ✅ Raycast проверка стен
-local function hasWallBetween(fromPos, toPos)
-    local params = RaycastParams.new()
-    params.FilterType = Enum.RaycastFilterType.Exclude
-    params.FilterDescendantsInstances = {LocalPlayer.Character}
-    local result = workspace:Raycast(fromPos, toPos - fromPos, params)
-    return result ~= nil
-end
-
--- ✅ Поиск обходного пути через PathfindingService
 local function computePath(fromPos, toPos)
     local path = PathfindingService:CreatePath({
         AgentRadius = 2,
@@ -619,53 +688,9 @@ local function computePath(fromPos, toPos)
     return nil
 end
 
--- ✅ Безопасный шаг (не сквозь стену, а в обход)
-local function safeStepTo(targetPos)
-    local myChar = LocalPlayer.Character
-    if not myChar then return end
-    local myRoot = myChar:FindFirstChild("HumanoidRootPart")
-    if not myRoot then return end
-    
-    local myPos = myRoot.Position
-    local direction = (targetPos - myPos).Unit
-    local distance = (targetPos - myPos).Magnitude
-    local stepSize = math.min(distance * CONFIG.STEP_SPEED, CONFIG.MAX_STEP)
-    
-    -- Прямой путь
-    local directStep = myPos + direction * stepSize
-    
-    -- ✅ Если стена — пробуем обход через боковые направления
-    if CONFIG.WALL_CHECK and hasWallBetween(myPos + Vector3.new(0, 2, 0), directStep + Vector3.new(0, 2, 0)) then
-        -- Пробуем обход справа и слева
-        local rightDir = Vector3.new(direction.Z, 0, -direction.X)
-        local leftDir = Vector3.new(-direction.Z, 0, direction.X)
-        
-        local rightStep = myPos + rightDir * stepSize
-        local leftStep = myPos + leftDir * stepSize
-        
-        local rightFree = not hasWallBetween(myPos + Vector3.new(0, 2, 0), rightStep + Vector3.new(0, 2, 0))
-        local leftFree = not hasWallBetween(myPos + Vector3.new(0, 2, 0), leftStep + Vector3.new(0, 2, 0))
-        
-        if rightFree then
-            directStep = rightStep + direction * stepSize * 0.5
-        elseif leftFree then
-            directStep = leftStep + direction * stepSize * 0.5
-        else
-            -- Совсем застряли — прыжок
-            local hum = myChar:FindFirstChildOfClass("Humanoid")
-            if hum then pcall(function() hum.Jump = true end) end
-            return
-        end
-    end
-    
-    -- ✅ Плавно применяем CFrame (не резко)
-    local targetLook = Vector3.new(targetPos.X, directStep.Y, targetPos.Z)
-    local newCF = CFrame.new(directStep, targetLook)
-    myRoot.CFrame = myRoot.CFrame:Lerp(newCF, 0.6)
-end
-
 local function positionBehindTarget()
     if not AutoFarmEnabled then return end
+    if SafeZoneConfig.InSafeZone then return end
     if not CurrentTarget or not CurrentTarget.Character then return end
 
     local myChar = LocalPlayer.Character
@@ -690,49 +715,60 @@ local function positionBehindTarget()
         return
     end
 
-    -- ✅ Если путь прямой свободен — идём напрямую
-    if not hasWallBetween(myPos + Vector3.new(0, 2, 0), behindPos + Vector3.new(0, 2, 0)) then
-        safeStepTo(behindPos)
-    else
-        -- ✅ Есть стена — используем Pathfinding
+    -- ✅ Если цель далеко (>25) — используем Pathfinding чтобы не врезаться
+    if dist > 25 then
         local now = tick()
         if now - lastRepathTime > CONFIG.REPATH_INTERVAL or not currentPath then
             lastRepathTime = now
             currentPath = computePath(myPos, behindPos)
             currentWaypointIndex = 1
         end
-        
+
         if currentPath then
             local waypoints = currentPath:GetWaypoints()
             if currentWaypointIndex <= #waypoints then
                 local wp = waypoints[currentWaypointIndex]
                 if wp then
-                    -- Прыжок если waypoint требует
                     if wp.Action == Enum.PathWaypointAction.Jump then
                         pcall(function() myHum.Jump = true end)
                     end
                     
                     local wpPos = wp.Position
-                    if (wpPos - myPos).Magnitude < 3 then
+                    if (wpPos - myPos).Magnitude < CONFIG.WAYPOINT_REACH then
                         currentWaypointIndex = currentWaypointIndex + 1
                     else
-                        safeStepTo(wpPos)
+                        -- Плавный шаг к waypoint
+                        local direction = (wpPos - myPos).Unit
+                        local stepSize = math.min((wpPos - myPos).Magnitude * CONFIG.STEP_SPEED, CONFIG.MAX_STEP)
+                        local newPos = myPos + direction * stepSize
+                        local newCF = CFrame.new(newPos, Vector3.new(targetPos.X, newPos.Y, targetPos.Z))
+                        myRoot.CFrame = myRoot.CFrame:Lerp(newCF, 0.7)
                     end
                 end
             else
                 currentPath = nil
             end
         else
-            -- Фолбэк — прямой шаг
-            safeStepTo(behindPos)
+            -- Fallback — прямой шаг
+            local direction = (behindPos - myPos).Unit
+            local stepSize = math.min(dist * CONFIG.STEP_SPEED, CONFIG.MAX_STEP)
+            local newPos = myPos + direction * stepSize
+            local newCF = CFrame.new(newPos, Vector3.new(targetPos.X, newPos.Y, targetPos.Z))
+            myRoot.CFrame = myRoot.CFrame:Lerp(newCF, 0.7)
         end
+    else
+        -- ✅ Близко — прямое CFrame-движение (быстро, античит не ловит)
+        local direction = (behindPos - myPos).Unit
+        local stepSize = math.min(dist * CONFIG.STEP_SPEED, CONFIG.MAX_STEP)
+        local newPos = myPos + direction * stepSize
+        local newCF = CFrame.new(newPos, Vector3.new(targetPos.X, newPos.Y, targetPos.Z))
+        myRoot.CFrame = newCF
     end
 
-    -- Anti-stuck
     if CONFIG.JUMP_ON_STUCK then
         if lastPos and (myPos - lastPos).Magnitude < 0.3 then
             stuckTimer = stuckTimer + CONFIG.STEP_INTERVAL
-            if stuckTimer > 0.6 then
+            if stuckTimer > 0.5 then
                 pcall(function() myHum.Jump = true end)
                 stuckTimer = 0
                 currentPath = nil
@@ -753,7 +789,7 @@ end)
 
 task.spawn(function()
     while true do
-        if AutoFarmEnabled then
+        if AutoFarmEnabled and not SafeZoneConfig.InSafeZone then
             positionBehindTarget()
             task.wait(CONFIG.STEP_INTERVAL)
         else
@@ -766,7 +802,7 @@ task.spawn(function()
 end)
 
 --// ============================================
---// ⚔️ AUTOATTACK v12
+--// ⚔️ AUTOATTACK
 --// ============================================
 local function clickMouse()
     pcall(function()
@@ -885,7 +921,131 @@ task.spawn(function()
     end
 end)
 
---// ANTIKICK
+--// ============================================
+--// 🛡️ AUTO SAFE ZONE
+--// ============================================
+task.spawn(function()
+    while true do
+        task.wait(0.5)
+        if not SafeZoneConfig.Enabled then continue end
+        
+        local myChar = LocalPlayer.Character
+        if not myChar then continue end
+        local myRoot = myChar:FindFirstChild("HumanoidRootPart")
+        local myHum = myChar:FindFirstChildOfClass("Humanoid")
+        if not myRoot or not myHum then continue end
+        if myHum.Health <= 0 then
+            SafeZoneConfig.InSafeZone = false
+            continue
+        end
+        
+        -- ✅ HP упало ниже Min → телепорт в сейф-зону
+        if not SafeZoneConfig.InSafeZone and myHum.Health <= SafeZoneConfig.MinHP then
+            SafeZoneConfig.ReturnPos = myRoot.CFrame
+            SafeZoneConfig.InSafeZone = true
+            
+            -- Телепорт ПОД карту (безопасная зона)
+            pcall(function()
+                myRoot.CFrame = CFrame.new(SafeZoneConfig.Position)
+            end)
+            
+            -- Дополнительно: закрепляем velocity чтобы не падал
+            pcall(function()
+                local bv = Instance.new("BodyPosition")
+                bv.Position = SafeZoneConfig.Position
+                bv.MaxForce = Vector3.new(math.huge, math.huge, math.huge)
+                bv.P = 10000
+                bv.Name = "JJS_SafeZone"
+                bv.Parent = myRoot
+            end)
+            
+            print("[JJS] HP low → entered safe zone at HP " .. math.floor(myHum.Health))
+        end
+        
+        -- ✅ HP восстановилось → возвращаемся
+        if SafeZoneConfig.InSafeZone and myHum.Health >= SafeZoneConfig.MaxHP then
+            -- Убираем BodyPosition
+            pcall(function()
+                local bv = myRoot:FindFirstChild("JJS_SafeZone")
+                if bv then bv:Destroy() end
+            end)
+            
+            -- Возвращаемся на исходную позицию
+            if SafeZoneConfig.ReturnPos then
+                pcall(function()
+                    myRoot.CFrame = SafeZoneConfig.ReturnPos
+                end)
+            end
+            
+            SafeZoneConfig.InSafeZone = false
+            SafeZoneConfig.ReturnPos = nil
+            print("[JJS] HP restored → returning from safe zone")
+        end
+        
+        -- ✅ Пока в сейф-зоне — держим позицию
+        if SafeZoneConfig.InSafeZone then
+            pcall(function()
+                myRoot.CFrame = CFrame.new(SafeZoneConfig.Position)
+            end)
+        end
+    end
+end)
+
+--// ============================================
+--// 🌐 AUTO SERVER HOP
+--// ============================================
+local function getServerList()
+    local servers = {}
+    local placeId = game.PlaceId
+    local cursor = ""
+    
+    local ok, result = pcall(function()
+        return HttpService:JSONDecode(
+            game:HttpGet("https://games.roblox.com/v1/games/" .. placeId .. "/servers/Public?sortOrder=Asc&limit=100&cursor=" .. cursor)
+        )
+    end)
+    
+    if ok and result and result.data then
+        for _, server in ipairs(result.data) do
+            if server.playing and server.playing < server.maxPlayers and server.id ~= game.JobId then
+                table.insert(servers, server.id)
+            end
+        end
+    end
+    return servers
+end
+
+task.spawn(function()
+    while true do
+        task.wait(ServerHopConfig.CheckInterval)
+        if not ServerHopConfig.Enabled then continue end
+        if tick() - ServerHopConfig.LastHop < 20 then continue end
+        
+        local playerCount = #Players:GetPlayers()
+        if playerCount < ServerHopConfig.MinPlayers then
+            print("[JJS] Only " .. playerCount .. " players, hopping server...")
+            ServerHopConfig.LastHop = tick()
+            
+            local servers = getServerList()
+            if #servers > 0 then
+                local newServer = servers[math.random(1, #servers)]
+                pcall(function()
+                    TeleportService:TeleportToPlaceInstance(game.PlaceId, newServer, LocalPlayer)
+                end)
+            else
+                -- Фолбэк — обычный реjoin
+                pcall(function()
+                    TeleportService:Teleport(game.PlaceId, LocalPlayer)
+                end)
+            end
+            task.wait(5)
+        end
+    end
+end)
+
+--// ============================================
+--// 🛡️ ANTIKICK
+--// ============================================
 local antiKickEnabled = true
 
 LocalPlayer.Idled:Connect(function()
@@ -913,7 +1073,7 @@ if mt then
     mt.__namecall = newcclosure(function(self, ...)
         local method = getnamecallmethod()
         if antiKickEnabled and method == "Kick" and self == LocalPlayer then
-            warn("[JJS AntiKick] Попытка кика заблокирована!")
+            warn("[JJS AntiKick] Kick blocked!")
             return
         end
         return oldNamecall(self, ...)
@@ -921,7 +1081,9 @@ if mt then
     setreadonly(mt, true)
 end
 
---// СКРЫТИЕ / ПОКАЗ
+--// ============================================
+--// HIDE/SHOW
+--// ============================================
 local GuiHidden = false
 
 local function hideGui()
@@ -965,6 +1127,7 @@ end
 
 CloseBtn.MouseButton1Click:Connect(hideGui)
 
+--// DRAGGING
 local dragging, dragInput, dragStart, startPos
 local dockDragging, dockDragInput, dockDragStart, dockStartPos, dockMoved
 local hudDragging, hudDragInput, hudDragStart, hudStartPos
@@ -1055,6 +1218,9 @@ UserInputService.InputBegan:Connect(function(input, processed)
     end
 end)
 
+--// ============================================
+--// BUTTON LOGIC
+--// ============================================
 local function refreshStatus()
     ToggleStatus.Text = "AutoFarm: " .. (AutoFarmEnabled and "ON" or "OFF") ..
                         " | AutoAttack: " .. (AutoAttackEnabled and "ON" or "OFF")
@@ -1081,21 +1247,64 @@ AutoAttackBtn.MouseButton1Click:Connect(function()
     refreshStatus()
 end)
 
-local function addHover(btn, getState)
-    btn.MouseEnter:Connect(function()
-        TweenService:Create(btn, TweenInfo.new(0.2), {
-            BackgroundColor3 = getState() and Color3.fromRGB(140, 60, 220) or Color3.fromRGB(75, 75, 90)
-        }):Play()
-    end)
-    btn.MouseLeave:Connect(function()
-        TweenService:Create(btn, TweenInfo.new(0.2), {
-            BackgroundColor3 = getState() and THEME.ButtonOn or THEME.ButtonOff
-        }):Play()
-    end)
-end
-addHover(AutoFarmBtn, function() return AutoFarmEnabled end)
-addHover(AutoAttackBtn, function() return AutoAttackEnabled end)
+--// SAFE ZONE BUTTON
+SafeZoneBtn.MouseButton1Click:Connect(function()
+    SafeZoneConfig.Enabled = not SafeZoneConfig.Enabled
+    SafeZoneBtn.Text = SafeZoneConfig.Enabled and "Disable Auto Safe Zone" or "Enable Auto Safe Zone"
+    TweenService:Create(SafeZoneBtn, TweenInfo.new(0.25), {
+        BackgroundColor3 = SafeZoneConfig.Enabled and THEME.ButtonOn or THEME.ButtonOff
+    }):Play()
+    if not SafeZoneConfig.Enabled then
+        SafeZoneConfig.InSafeZone = false
+        -- Убираем BodyPosition если остался
+        local myChar = LocalPlayer.Character
+        if myChar then
+            local myRoot = myChar:FindFirstChild("HumanoidRootPart")
+            if myRoot then
+                local bv = myRoot:FindFirstChild("JJS_SafeZone")
+                if bv then bv:Destroy() end
+            end
+        end
+    end
+end)
 
+MinHPInput.FocusLost:Connect(function()
+    local val = tonumber(MinHPInput.Text)
+    if val and val > 0 then
+        SafeZoneConfig.MinHP = val
+    else
+        MinHPInput.Text = tostring(SafeZoneConfig.MinHP)
+    end
+end)
+
+MaxHPInput.FocusLost:Connect(function()
+    local val = tonumber(MaxHPInput.Text)
+    if val and val > 0 then
+        SafeZoneConfig.MaxHP = val
+    else
+        MaxHPInput.Text = tostring(SafeZoneConfig.MaxHP)
+    end
+end)
+
+--// SERVER HOP BUTTON
+ServerHopBtn.MouseButton1Click:Connect(function()
+    ServerHopConfig.Enabled = not ServerHopConfig.Enabled
+    ServerHopBtn.Text = ServerHopConfig.Enabled and "Disable Auto Server Hop" or "Enable Auto Server Hop"
+    TweenService:Create(ServerHopBtn, TweenInfo.new(0.25), {
+        BackgroundColor3 = ServerHopConfig.Enabled and THEME.ButtonOn or THEME.ButtonOff
+    }):Play()
+end)
+
+MinPlayersInput.FocusLost:Connect(function()
+    local val = tonumber(MinPlayersInput.Text)
+    if val and val > 0 then
+        ServerHopConfig.MinPlayers = math.floor(val)
+    else
+        MinPlayersInput.Text = tostring(ServerHopConfig.MinPlayers)
+    end
+end)
+
+--// HOVER
 DockBtn.MouseEnter:Connect(function()
     TweenService:Create(DockBtn, TweenInfo.new(0.2), {BackgroundColor3 = THEME.ButtonOn}):Play()
 end)
@@ -1103,6 +1312,7 @@ DockBtn.MouseLeave:Connect(function()
     TweenService:Create(DockBtn, TweenInfo.new(0.2), {BackgroundColor3 = THEME.Background}):Play()
 end)
 
+--// DROPDOWN
 local DropdownOpen = false
 
 local function rebuildDropdown()
@@ -1172,6 +1382,7 @@ TargetDropdown.MouseButton1Click:Connect(function()
     end
 end)
 
+--// ANIMATION
 local function tween(obj, time, props)
     return TweenService:Create(obj, TweenInfo.new(time, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), props)
 end
@@ -1182,12 +1393,15 @@ task.spawn(function()
     tween(DragBar, 0.6, {BackgroundTransparency = 0, TextTransparency = 0}):Play()
     tween(Sep1, 0.8, {BackgroundTransparency = 0.3}):Play()
     tween(Sep2, 0.8, {BackgroundTransparency = 0.3}):Play()
+    tween(Sep3, 0.8, {BackgroundTransparency = 0.3}):Play()
+    tween(Sep4, 0.8, {BackgroundTransparency = 0.3}):Play()
+    tween(Sep5, 0.8, {BackgroundTransparency = 0.3}):Play()
     task.wait(0.15)
 
     HelloLabel.Text = "Hello, " .. LocalPlayer.Name
     tween(HelloLabel, 0.6, {TextTransparency = 0}):Play()
     local origPos = HelloLabel.Position
-    HelloLabel.Position = UDim2.new(0, 10, 0, 38)
+    HelloLabel.Position = UDim2.new(0, 10, 0, 12)
     tween(HelloLabel, 0.6, {Position = origPos}):Play()
 
     task.wait(0.3)
@@ -1209,14 +1423,32 @@ task.spawn(function()
     StatusLabel.TextColor3 = THEME.Green
 
     tween(AutoFarmBtn, 0.5, {TextTransparency = 0, BackgroundTransparency = 0}):Play()
-    tween(BtnStroke, 0.5, {Transparency = 0.3}):Play()
+    tween(AutoFarmStroke, 0.5, {Transparency = 0.3}):Play()
     tween(AutoAttackBtn, 0.5, {TextTransparency = 0, BackgroundTransparency = 0}):Play()
-    tween(Btn2Stroke, 0.5, {Transparency = 0.3}):Play()
+    tween(AutoAttackStroke, 0.5, {Transparency = 0.3}):Play()
     tween(ToggleStatus, 0.5, {TextTransparency = 0}):Play()
     tween(TargetTitle, 0.5, {TextTransparency = 0}):Play()
     tween(TargetDropdown, 0.5, {TextTransparency = 0, BackgroundTransparency = 0}):Play()
     tween(DDStroke, 0.5, {Transparency = 0.3}):Play()
     tween(DDArrow, 0.5, {TextTransparency = 0}):Play()
+    
+    tween(SafeZoneTitle, 0.5, {TextTransparency = 0}):Play()
+    tween(SafeZoneBtn, 0.5, {TextTransparency = 0, BackgroundTransparency = 0}):Play()
+    tween(SafeZoneStroke, 0.5, {Transparency = 0.3}):Play()
+    tween(MinHPLabel, 0.5, {TextTransparency = 0}):Play()
+    tween(MinHPInput, 0.5, {TextTransparency = 0, BackgroundTransparency = 0}):Play()
+    tween(MinHPStroke, 0.5, {Transparency = 0.3}):Play()
+    tween(MaxHPLabel, 0.5, {TextTransparency = 0}):Play()
+    tween(MaxHPInput, 0.5, {TextTransparency = 0, BackgroundTransparency = 0}):Play()
+    tween(MaxHPStroke, 0.5, {Transparency = 0.3}):Play()
+    
+    tween(ServerHopTitle, 0.5, {TextTransparency = 0}):Play()
+    tween(ServerHopBtn, 0.5, {TextTransparency = 0, BackgroundTransparency = 0}):Play()
+    tween(ServerHopStroke, 0.5, {Transparency = 0.3}):Play()
+    tween(MinPlayersLabel, 0.5, {TextTransparency = 0}):Play()
+    tween(MinPlayersInput, 0.5, {TextTransparency = 0, BackgroundTransparency = 0}):Play()
+    tween(MinPlayersStroke, 0.5, {Transparency = 0.3}):Play()
+    
     tween(CreditLabel, 0.6, {TextTransparency = 0}):Play()
     tween(Footer, 0.5, {TextTransparency = 0}):Play()
     tween(CloseBtn, 0.5, {TextTransparency = 0, BackgroundTransparency = 0}):Play()
@@ -1230,5 +1462,6 @@ _G.JJS_CLEANUP = function()
     pcall(function() TargetHud:Destroy() end)
 end
 
-print("[JJS Script v13] Loaded for " .. LocalPlayer.Name)
-print("[JJS Script v13] Made by Xyqwerq | Anti-Cheat Safe")
+print("[JJS Script v14] Loaded for " .. LocalPlayer.Name)
+print("[JJS Script v14] Made by Xyqwerq")
+print("[JJS Script v14] AutoFarm v12 logic + Pathfinding + SafeZone + ServerHop")
