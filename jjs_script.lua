@@ -1,6 +1,6 @@
 --// ============================================
---// JJS Script v15.3 for Delta Executor
---// + Scrollable GUI | + AutoRejoin | + Persistent Config
+--// JJS Script v15.4 for Delta Executor
+--// + Fixed Hover | + Big ServerHop + Retry | + Scrollable GUI
 --// Made by Xyqwerq
 --// ============================================
 
@@ -37,6 +37,8 @@ local THEME = {
     Accent         = Color3.fromRGB(160, 60, 255),
     ButtonOff      = Color3.fromRGB(55, 55, 65),
     ButtonOn       = Color3.fromRGB(120, 50, 200),
+    ButtonOffHover = Color3.fromRGB(80, 80, 100),
+    ButtonOnHover  = Color3.fromRGB(150, 70, 240),
     Green          = Color3.fromRGB(90, 255, 130),
     Red            = Color3.fromRGB(255, 90, 90),
     Yellow         = Color3.fromRGB(255, 200, 80),
@@ -51,7 +53,7 @@ local GUI_H = 400
 local MIN_WIDTH = 220
 local MIN_HEIGHT = 250
 
---// ============ AUTO-FIT TO SCREEN ============
+--// ============ AUTO-FIT SCREEN ============
 do
     local viewport = workspace.CurrentCamera.ViewportSize
     if GUI_H > viewport.Y - 80 then
@@ -187,7 +189,7 @@ DragBar.Size = UDim2.new(1, -50, 0, 22)
 DragBar.BackgroundColor3 = THEME.BackgroundDark
 DragBar.BackgroundTransparency = 1
 DragBar.BorderSizePixel = 0
-DragBar.Text = "JJS Script v15.3"
+DragBar.Text = "JJS Script v15.4"
 DragBar.TextColor3 = THEME.Accent
 DragBar.Font = Enum.Font.GothamBold
 DragBar.TextSize = 11
@@ -273,7 +275,7 @@ ResizeHandle.InputBegan:Connect(function(input)
     end
 end)
 
---// SCROLL FRAME (SCROLLABLE)
+--// SCROLL FRAME
 local ScrollFrame = Instance.new("ScrollingFrame")
 ScrollFrame.Size = UDim2.new(1, 0, 1, -50)
 ScrollFrame.Position = UDim2.new(0, 0, 0, 26)
@@ -336,6 +338,7 @@ local function makeSeparator(y)
     return sep
 end
 
+-- ✅ makeButton БЕЗ встроенного hover (hover добавляется отдельно с учётом состояния)
 local function makeButton(text, y, height)
     local btn = Instance.new("TextButton")
     btn.Size = UDim2.new(1, -20, 0, height or 28)
@@ -351,12 +354,6 @@ local function makeButton(text, y, height)
     btn.Parent = ScrollFrame
     local c = Instance.new("UICorner"); c.CornerRadius = UDim.new(0, 6); c.Parent = btn
     local s = Instance.new("UIStroke"); s.Color = THEME.Stroke; s.Thickness = 1; s.Transparency = 1; s.Parent = btn
-    btn.MouseEnter:Connect(function()
-        TweenService:Create(btn, TweenInfo.new(0.2), {BackgroundColor3 = Color3.fromRGB(75, 75, 90)}):Play()
-    end)
-    btn.MouseLeave:Connect(function()
-        TweenService:Create(btn, TweenInfo.new(0.2), {BackgroundColor3 = THEME.ButtonOff}):Play()
-    end)
     return btn, s
 end
 
@@ -499,7 +496,7 @@ local MinPlayersInput, MinPlayersStroke = makeInput("3", 486, "3")
 
 local Sep5 = makeSeparator(520)
 
---// FOOTER (fixed on MainFrame)
+--// FOOTER
 local CreditLabel = Instance.new("TextLabel")
 CreditLabel.Size = UDim2.new(1, 0, 0, 14)
 CreditLabel.Position = UDim2.new(0, 0, 1, -32)
@@ -516,7 +513,7 @@ local Footer = Instance.new("TextLabel")
 Footer.Size = UDim2.new(1, 0, 0, 12)
 Footer.Position = UDim2.new(0, 0, 1, -18)
 Footer.BackgroundTransparency = 1
-Footer.Text = "[RightShift] Hide • v15.3"
+Footer.Text = "[RightShift] Hide • v15.4"
 Footer.TextColor3 = Color3.fromRGB(120, 120, 130)
 Footer.Font = Enum.Font.Gotham
 Footer.TextSize = 9
@@ -549,6 +546,30 @@ DockStroke.Color = THEME.Stroke
 DockStroke.Thickness = 1.5
 DockStroke.Transparency = 1
 DockStroke.Parent = DockBtn
+
+--// ============================================
+--// ✅ HOVER EFFECTS (все кнопки, с состоянием)
+--// ============================================
+local function addStateHover(btn, getState)
+    btn.MouseEnter:Connect(function()
+        local on = getState()
+        TweenService:Create(btn, TweenInfo.new(0.2), {
+            BackgroundColor3 = on and THEME.ButtonOnHover or THEME.ButtonOffHover
+        }):Play()
+    end)
+    btn.MouseLeave:Connect(function()
+        local on = getState()
+        TweenService:Create(btn, TweenInfo.new(0.2), {
+            BackgroundColor3 = on and THEME.ButtonOn or THEME.ButtonOff
+        }):Play()
+    end)
+end
+
+-- ✅ Подключаем hover ко ВСЕМ toggle-кнопкам с учётом их состояния
+addStateHover(AutoFarmBtn, function() return AutoFarmEnabled end)
+addStateHover(AutoAttackBtn, function() return AutoAttackEnabled end)
+addStateHover(SafeZoneBtn, function() return SafeZoneConfig.Enabled end)
+addStateHover(ServerHopBtn, function() return ServerHopConfig.Enabled end)
 
 --// TARGET HUD
 local TargetHud = Instance.new("ScreenGui")
@@ -1031,25 +1052,77 @@ task.spawn(function()
     end
 end)
 
---// AUTO SERVER HOP
+--// ============================================
+--// 🌐 AUTO SERVER HOP — Big servers + Retry
+--// ============================================
+
+-- ✅ Получить список серверов с игроками
 local function getServerList()
     local servers = {}
     local placeId = game.PlaceId
     local ok, result = pcall(function()
         return HttpService:JSONDecode(
-            game:HttpGet("https://games.roblox.com/v1/games/" .. placeId .. "/servers/Public?sortOrder=Asc&limit=100")
+            game:HttpGet("https://games.roblox.com/v1/games/" .. placeId .. "/servers/Public?sortOrder=Desc&limit=100")
         )
     end)
+    
     if ok and result and result.data then
         for _, server in ipairs(result.data) do
-            if server.playing and server.playing < server.maxPlayers and server.id ~= game.JobId then
-                table.insert(servers, server.id)
+            -- ✅ Только серверы с игроками и не полные
+            if server.playing and server.playing > 1 
+               and server.playing < server.maxPlayers 
+               and server.id ~= game.JobId then
+                table.insert(servers, {
+                    id = server.id,
+                    playing = server.playing,
+                    maxPlayers = server.maxPlayers,
+                })
             end
         end
     end
+    
+    -- ✅ Сортируем по количеству игроков (сначала самые большие)
+    table.sort(servers, function(a, b)
+        return a.playing > b.playing
+    end)
+    
     return servers
 end
 
+-- ✅ Попытка телепорта на лучший сервер
+local function attemptServerHop()
+    local servers = getServerList()
+    
+    if #servers == 0 then
+        print("[JJS] No suitable servers → plain rejoin")
+        pcall(function()
+            TeleportService:Teleport(game.PlaceId, LocalPlayer)
+        end)
+        return false
+    end
+    
+    -- ✅ Берём один из ТОП-5 самых больших серверов
+    local poolSize = math.min(#servers, 5)
+    local chosen = servers[math.random(1, poolSize)]
+    
+    print("[JJS] Hop target: " .. chosen.playing .. "/" .. chosen.maxPlayers .. " players")
+    
+    local success = false
+    pcall(function()
+        TeleportService:TeleportToPlaceInstance(game.PlaceId, chosen.id, LocalPlayer)
+        success = true
+    end)
+    
+    if success then
+        print("[JJS] Teleport initiated ✓")
+    else
+        warn("[JJS] Teleport failed, will retry in 5s")
+    end
+    
+    return success
+end
+
+-- ✅ Schedule rejoin queue перед телепортом
 local function scheduleRejoinQueue()
     pcall(saveConfig)
     
@@ -1089,39 +1162,58 @@ local function scheduleRejoinQueue()
         end)
     end
     
-    if not queued then
-        warn("[JJS] queue_on_teleport unavailable!")
-    else
+    if queued then
         print("[JJS] Rejoin queue scheduled ✓")
+    else
+        warn("[JJS] queue_on_teleport unavailable!")
     end
 end
 
+-- ✅ Основной цикл ServerHop с retry
 task.spawn(function()
     while true do
         task.wait(ServerHopConfig.CheckInterval)
+        
         if not ServerHopConfig.Enabled then continue end
         if tick() - ServerHopConfig.LastHop < 20 then continue end
         
         local playerCount = #Players:GetPlayers()
         if playerCount < ServerHopConfig.MinPlayers then
-            print("[JJS] Only " .. playerCount .. " players → hopping...")
+            print("[JJS] Only " .. playerCount .. " players → server hop")
             ServerHopConfig.LastHop = tick()
             
             scheduleRejoinQueue()
             task.wait(0.5)
             
-            local servers = getServerList()
-            if #servers > 0 then
-                local newServer = servers[math.random(1, #servers)]
-                pcall(function()
-                    TeleportService:TeleportToPlaceInstance(game.PlaceId, newServer, LocalPlayer)
-                end)
-            else
-                pcall(function()
-                    TeleportService:Teleport(game.PlaceId, LocalPlayer)
-                end)
-            end
+            local oldJobId = game.JobId
+            
+            pcall(function() attemptServerHop() end)
+            
+            -- ✅ Ждём 5 сек и проверяем — случился ли телепорт
             task.wait(5)
+            
+            if game.JobId == oldJobId then
+                warn("[JJS] Teleport didn't happen → retrying...")
+                task.wait(0.5)
+                
+                local servers = getServerList()
+                if #servers > 0 then
+                    local retryServer = servers[math.random(1, math.min(#servers, 5))]
+                    pcall(function()
+                        TeleportService:TeleportToPlaceInstance(game.PlaceId, retryServer.id, LocalPlayer)
+                    end)
+                    print("[JJS] Retry teleport → " .. retryServer.playing .. " players")
+                    task.wait(5)
+                end
+                
+                if game.JobId == oldJobId then
+                    warn("[JJS] Retry failed → plain rejoin")
+                    pcall(function()
+                        TeleportService:Teleport(game.PlaceId, LocalPlayer)
+                    end)
+                    task.wait(5)
+                end
+            end
         end
     end
 end)
@@ -1586,8 +1678,8 @@ _G.JJS_CLEANUP = function()
     pcall(function() TargetHud:Destroy() end)
 end
 
-print("[JJS Script v15.3] Loaded for " .. LocalPlayer.Name)
-print("[JJS Script v15.3] Made by Xyqwerq")
+print("[JJS Script v15.4] Loaded for " .. LocalPlayer.Name)
+print("[JJS Script v15.4] Made by Xyqwerq")
 if hasFileSystem then
     print("[JJS] File system: OK")
 else
