@@ -1,6 +1,6 @@
 --// ============================================
---// JJS Script v3 for Delta Executor
---// + Close Button | + Dock Button | + Draggable HUD
+--// JJS Script v4 for Delta Executor
+--// + Hotkey (RightShift) | + Resizable GUI | + Draggable Dock
 --// ============================================
 
 local Players = game:GetService("Players")
@@ -10,7 +10,7 @@ local UserInputService = game:GetService("UserInputService")
 local LocalPlayer = Players.LocalPlayer
 local Mouse = LocalPlayer:GetMouse()
 
---// ============ НАСТРОЙКИ ЦВЕТОВ ============
+--// ============ НАСТРОЙКИ ============
 local THEME = {
     Background   = Color3.fromRGB(35, 35, 40),
     Stroke       = Color3.fromRGB(160, 60, 255),
@@ -22,6 +22,10 @@ local THEME = {
     Green        = Color3.fromRGB(90, 255, 130),
     Red          = Color3.fromRGB(255, 90, 90),
 }
+
+local HOTKEY = Enum.KeyCode.RightShift  -- Горячая клавиша скрытия/показа
+local MIN_WIDTH = 300
+local MIN_HEIGHT = 380
 
 --// ============ УДАЛЯЕМ СТАРЫЕ GUI ============
 for _, name in ipairs({"JJSScriptGui", "JJSTargetHud"}) do
@@ -65,23 +69,22 @@ InnerStroke.Thickness = 1
 InnerStroke.Transparency = 1
 InnerStroke.Parent = MainFrame
 
---// Заголовок (перетаскивание)
+--// Заголовок
 local DragBar = Instance.new("TextLabel")
-DragBar.Size = UDim2.new(1, -40, 0, 28)
+DragBar.Size = UDim2.new(1, -70, 0, 28)
 DragBar.Position = UDim2.new(0, 0, 0, 0)
 DragBar.BackgroundColor3 = Color3.fromRGB(28, 28, 33)
 DragBar.BackgroundTransparency = 1
 DragBar.BorderSizePixel = 0
-DragBar.Text = "JJS Script v3"
+DragBar.Text = "JJS Script v4"
 DragBar.TextColor3 = THEME.Accent
 DragBar.Font = Enum.Font.GothamBold
 DragBar.TextSize = 13
 DragBar.TextTransparency = 1
 DragBar.Parent = MainFrame
 
---// ============ КРЕСТИК (ЗАКРЫТИЕ) ============
+--// ============ КРЕСТИК ============
 local CloseBtn = Instance.new("TextButton")
-CloseBtn.Name = "CloseBtn"
 CloseBtn.Size = UDim2.new(0, 24, 0, 24)
 CloseBtn.Position = UDim2.new(1, -32, 0, 4)
 CloseBtn.BackgroundColor3 = Color3.fromRGB(55, 55, 65)
@@ -103,6 +106,57 @@ CloseBtn.MouseEnter:Connect(function()
 end)
 CloseBtn.MouseLeave:Connect(function()
     TweenService:Create(CloseBtn, TweenInfo.new(0.15), {BackgroundColor3 = Color3.fromRGB(55, 55, 65)}):Play()
+end)
+
+--// ============ РЕСАЙЗ (правый нижний угол) ============
+local ResizeHandle = Instance.new("TextButton")
+ResizeHandle.Size = UDim2.new(0, 16, 0, 16)
+ResizeHandle.Position = UDim2.new(1, -18, 1, -18)
+ResizeHandle.BackgroundColor3 = THEME.Stroke
+ResizeHandle.BackgroundTransparency = 1
+ResizeHandle.Text = ""
+ResizeHandle.AutoButtonColor = false
+ResizeHandle.Parent = MainFrame
+
+local ResizeCorner = Instance.new("UICorner")
+ResizeCorner.CornerRadius = UDim.new(0, 4)
+ResizeCorner.Parent = ResizeHandle
+
+-- Иконка ресайза (диагональные линии)
+local ResizeIcon = Instance.new("TextLabel")
+ResizeIcon.Size = UDim2.new(1, 0, 1, 0)
+ResizeIcon.BackgroundTransparency = 1
+ResizeIcon.Text = "◢"
+ResizeIcon.TextColor3 = THEME.Stroke
+ResizeIcon.Font = Enum.Font.GothamBold
+ResizeIcon.TextSize = 14
+ResizeIcon.TextTransparency = 1
+ResizeIcon.Parent = ResizeHandle
+
+ResizeHandle.MouseEnter:Connect(function()
+    TweenService:Create(ResizeHandle, TweenInfo.new(0.2), {BackgroundTransparency = 0.3}):Play()
+end)
+ResizeHandle.MouseLeave:Connect(function()
+    if not resizing then
+        TweenService:Create(ResizeHandle, TweenInfo.new(0.2), {BackgroundTransparency = 1}):Play()
+    end
+end)
+
+local resizing = false
+local resizeStart, resizeStartSize
+
+ResizeHandle.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        resizing = true
+        resizeStart = input.Position
+        resizeStartSize = MainFrame.AbsoluteSize
+        input.Changed:Connect(function()
+            if input.UserInputState == Enum.UserInputState.End then
+                resizing = false
+                TweenService:Create(ResizeHandle, TweenInfo.new(0.2), {BackgroundTransparency = 1}):Play()
+            end
+        end)
+    end
 end)
 
 --// ============ ГЛАВНЫЙ ТЕКСТ ============
@@ -142,7 +196,6 @@ ScanLabel.TextTransparency = 1
 ScanLabel.TextXAlignment = Enum.TextXAlignment.Center
 ScanLabel.Parent = MainFrame
 
---// ============ РАЗДЕЛИТЕЛЬ ============
 local function makeSeparator(y)
     local sep = Instance.new("Frame")
     sep.Size = UDim2.new(1, -40, 0, 1)
@@ -155,7 +208,7 @@ local function makeSeparator(y)
 end
 local Sep1 = makeSeparator(122)
 
---// ============ КНОПКА AUTO FARM ============
+--// ============ КНОПКИ ============
 local AutoFarmBtn = Instance.new("TextButton")
 AutoFarmBtn.Size = UDim2.new(1, -40, 0, 36)
 AutoFarmBtn.Position = UDim2.new(0, 20, 0, 135)
@@ -179,7 +232,6 @@ BtnStroke.Thickness = 1.5
 BtnStroke.Transparency = 1
 BtnStroke.Parent = AutoFarmBtn
 
---// ============ КНОПКА AUTO ATTACK ============
 local AutoAttackBtn = Instance.new("TextButton")
 AutoAttackBtn.Size = UDim2.new(1, -40, 0, 36)
 AutoAttackBtn.Position = UDim2.new(0, 20, 0, 180)
@@ -203,7 +255,6 @@ Btn2Stroke.Thickness = 1.5
 Btn2Stroke.Transparency = 1
 Btn2Stroke.Parent = AutoAttackBtn
 
---// ============ СТАТУСЫ ============
 local ToggleStatus = Instance.new("TextLabel")
 ToggleStatus.Size = UDim2.new(1, -40, 0, 14)
 ToggleStatus.Position = UDim2.new(0, 20, 0, 220)
@@ -218,7 +269,7 @@ ToggleStatus.Parent = MainFrame
 
 local Sep2 = makeSeparator(240)
 
---// ============ ВЫБОР ТАРГЕТА ============
+--// ============ TARGET SELECTOR ============
 local TargetTitle = Instance.new("TextLabel")
 TargetTitle.Size = UDim2.new(1, -40, 0, 16)
 TargetTitle.Position = UDim2.new(0, 20, 0, 250)
@@ -298,7 +349,7 @@ local Footer = Instance.new("TextLabel")
 Footer.Size = UDim2.new(1, 0, 0, 16)
 Footer.Position = UDim2.new(0, 0, 1, -22)
 Footer.BackgroundTransparency = 1
-Footer.Text = "Delta Executor • JJS v3"
+Footer.Text = "[RightShift] Скрыть/Показать • v4"
 Footer.TextColor3 = Color3.fromRGB(120, 120, 130)
 Footer.Font = Enum.Font.Gotham
 Footer.TextSize = 11
@@ -306,10 +357,9 @@ Footer.TextTransparency = 1
 Footer.Parent = MainFrame
 
 --// ============================================
---// DOCK BUTTON (кнопка открытия)
+--// DOCK BUTTON
 --// ============================================
 local DockBtn = Instance.new("TextButton")
-DockBtn.Name = "DockBtn"
 DockBtn.Size = UDim2.new(0, 50, 0, 50)
 DockBtn.Position = UDim2.new(0, 20, 0.5, -25)
 DockBtn.BackgroundColor3 = THEME.Background
@@ -321,6 +371,7 @@ DockBtn.TextTransparency = 1
 DockBtn.BackgroundTransparency = 1
 DockBtn.AutoButtonColor = false
 DockBtn.Visible = false
+DockBtn.Active = true
 DockBtn.Parent = ScreenGui
 
 local DockCorner = Instance.new("UICorner")
@@ -333,96 +384,9 @@ DockStroke.Thickness = 2
 DockStroke.Transparency = 1
 DockStroke.Parent = DockBtn
 
-DockBtn.MouseEnter:Connect(function()
-    TweenService:Create(DockBtn, TweenInfo.new(0.2), {BackgroundColor3 = THEME.ButtonOn}):Play()
-    TweenService:Create(DockBtn, TweenInfo.new(0.2), {Size = UDim2.new(0, 56, 0, 56), Position = UDim2.new(0, 17, 0.5, -28)}):Play()
-end)
-DockBtn.MouseLeave:Connect(function()
-    TweenService:Create(DockBtn, TweenInfo.new(0.2), {BackgroundColor3 = THEME.Background}):Play()
-    TweenService:Create(DockBtn, TweenInfo.new(0.2), {Size = UDim2.new(0, 50, 0, 50), Position = UDim2.new(0, 20, 0.5, -25)}):Play()
-end)
-
--- Перетаскивание док-кнопки
-local dockDragging, dockDragStart, dockStartPos
-DockBtn.InputBegan:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-        dockDragging = true
-        dockDragStart = input.Position
-        dockStartPos = DockBtn.Position
-        input.Changed:Connect(function()
-            if input.UserInputState == Enum.UserInputState.End then
-                dockDragging = false
-            end
-        end)
-    end
-end)
-DockBtn.InputChanged:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
-        dockDragInput = input
-    end
-end)
-
--- ============ ФУНКЦИИ СКРЫТИЯ/ПОКАЗА ============
-local function hideGui()
-    -- Скрываем HUD
-    HudFrame.Visible = false
-    
-    -- Анимация исчезновения
-    TweenService:Create(MainFrame, TweenInfo.new(0.3, Enum.EasingStyle.Quart, Enum.EasingDirection.In), {
-        Size = UDim2.new(0, 0, 0, 0),
-        Position = UDim2.new(0.5, 0, 0.5, 0),
-        BackgroundTransparency = 1
-    }):Play()
-    TweenService:Create(MainStroke, TweenInfo.new(0.3), {Transparency = 1}):Play()
-    TweenService:Create(InnerStroke, TweenInfo.new(0.3), {Transparency = 1}):Play()
-    
-    task.wait(0.3)
-    MainFrame.Visible = false
-    
-    -- Показываем Dock Button
-    DockBtn.Visible = true
-    TweenService:Create(DockBtn, TweenInfo.new(0.4, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
-        BackgroundTransparency = 0,
-        TextTransparency = 0
-    }):Play()
-    TweenService:Create(DockStroke, TweenInfo.new(0.4), {Transparency = 0.2}):Play()
-end
-
-local function showGui()
-    -- Скрываем Dock Button
-    TweenService:Create(DockBtn, TweenInfo.new(0.25), {
-        BackgroundTransparency = 1,
-        TextTransparency = 1
-    }):Play()
-    TweenService:Create(DockStroke, TweenInfo.new(0.25), {Transparency = 1}):Play()
-    
-    task.wait(0.25)
-    DockBtn.Visible = false
-    
-    -- Показываем GUI
-    MainFrame.Visible = true
-    MainFrame.Size = UDim2.new(0, 0, 0, 0)
-    MainFrame.Position = UDim2.new(0.5, 0, 0.5, 0)
-    
-    TweenService:Create(MainFrame, TweenInfo.new(0.4, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
-        Size = UDim2.new(0, 340, 0, 420),
-        Position = UDim2.new(0.5, -170, 0.5, -210),
-        BackgroundTransparency = 0
-    }):Play()
-    TweenService:Create(MainStroke, TweenInfo.new(0.4), {Transparency = 0.1}):Play()
-    TweenService:Create(InnerStroke, TweenInfo.new(0.4), {Transparency = 0.7}):Play()
-end
-
-CloseBtn.MouseButton1Click:Connect(hideGui)
-DockBtn.MouseButton1Click:Connect(function()
-    if not dockDragging then
-        showGui()
-    end
-end)
-
--- ============================================
--- TARGET HUD (перетаскиваемый)
--- ============================================
+--// ============================================
+--// TARGET HUD
+--// ============================================
 local TargetHud = Instance.new("ScreenGui")
 TargetHud.Name = "JJSTargetHud"
 TargetHud.ResetOnSpawn = false
@@ -503,44 +467,8 @@ HudHpText.TextSize = 9
 HudHpText.TextXAlignment = Enum.TextXAlignment.Left
 HudHpText.Parent = HudFrame
 
---// ============ ПЕРЕТАСКИВАНИЕ HUD ============
-local hudDragging, hudDragInput, hudDragStart, hudStartPos
-HudFrame.InputBegan:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-        hudDragging = true
-        hudDragStart = input.Position
-        hudStartPos = HudFrame.Position
-        input.Changed:Connect(function()
-            if input.UserInputState == Enum.UserInputState.End then
-                hudDragging = false
-            end
-        end)
-    end
-end)
-HudFrame.InputChanged:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
-        hudDragInput = input
-    end
-end)
-UserInputService.InputChanged:Connect(function(input)
-    if input == hudDragInput and hudDragging then
-        local delta = input.Position - hudDragStart
-        HudFrame.Position = UDim2.new(
-            hudStartPos.X.Scale, hudStartPos.X.Offset + delta.X,
-            hudStartPos.Y.Scale, hudStartPos.Y.Offset + delta.Y
-        )
-    end
-    if input == dockDragInput and dockDragging then
-        local delta = input.Position - dockDragStart
-        DockBtn.Position = UDim2.new(
-            dockStartPos.X.Scale, dockStartPos.X.Offset + delta.X,
-            dockStartPos.Y.Scale, dockStartPos.Y.Offset + delta.Y
-        )
-    end
-end)
-
 --// ============================================
---// ЛОГИКА (AutoFarm / AutoAttack / Target)
+--// ЛОГИКА AUTOFARM / AUTOATTACK
 --// ============================================
 local AutoFarmEnabled = false
 local AutoAttackEnabled = false
@@ -627,7 +555,6 @@ local function updateHud()
     HudAvatar.Image = "https://www.roblox.com/headshot-thumbnail/image?userId=" .. CurrentTarget.UserId .. "&width=150&height=150&format=png"
 end
 
--- Слежение за смертью
 task.spawn(function()
     while true do
         task.wait(0.3)
@@ -645,7 +572,6 @@ task.spawn(function()
     end
 end)
 
--- Позиция сзади
 local function positionBehindTarget()
     if not AutoFarmEnabled then return end
     if not CurrentTarget or not CurrentTarget.Character then return end
@@ -657,7 +583,6 @@ local function positionBehindTarget()
     myRoot.CFrame = myRoot.CFrame:Lerp(behindPos, 0.35)
 end
 
--- AutoAttack
 local VirtualUser = game:GetService("VirtualUser")
 
 local function tryAttack()
@@ -686,9 +611,7 @@ task.spawn(function()
                 local myHrp = myChar and myChar:FindFirstChild("HumanoidRootPart")
                 if hum and hum.Health > 0 and hrp and myHrp then
                     local dist = (hrp.Position - myHrp.Position).Magnitude
-                    if dist <= 15 then
-                        tryAttack()
-                    end
+                    if dist <= 15 then tryAttack() end
                 end
             end
             task.wait(0.12)
@@ -716,7 +639,172 @@ task.spawn(function()
     end
 end)
 
--- ============ КНОПКИ ============
+--// ============================================
+--// СКРЫТИЕ / ПОКАЗ GUI
+--// ============================================
+local GuiHidden = false
+
+local function hideGui()
+    if GuiHidden then return end
+    GuiHidden = true
+    
+    HudFrame.Visible = false
+    
+    TweenService:Create(MainFrame, TweenInfo.new(0.3, Enum.EasingStyle.Quart, Enum.EasingDirection.In), {
+        Size = UDim2.new(0, 0, 0, 0),
+        Position = UDim2.new(0.5, 0, 0.5, 0),
+        BackgroundTransparency = 1
+    }):Play()
+    TweenService:Create(MainStroke, TweenInfo.new(0.3), {Transparency = 1}):Play()
+    TweenService:Create(InnerStroke, TweenInfo.new(0.3), {Transparency = 1}):Play()
+    
+    task.wait(0.3)
+    MainFrame.Visible = false
+    
+    DockBtn.Visible = true
+    TweenService:Create(DockBtn, TweenInfo.new(0.4, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
+        BackgroundTransparency = 0,
+        TextTransparency = 0
+    }):Play()
+    TweenService:Create(DockStroke, TweenInfo.new(0.4), {Transparency = 0.2}):Play()
+end
+
+local function showGui()
+    if not GuiHidden then return end
+    GuiHidden = false
+    
+    TweenService:Create(DockBtn, TweenInfo.new(0.25), {
+        BackgroundTransparency = 1,
+        TextTransparency = 1
+    }):Play()
+    TweenService:Create(DockStroke, TweenInfo.new(0.25), {Transparency = 1}):Play()
+    
+    task.wait(0.25)
+    DockBtn.Visible = false
+    
+    MainFrame.Visible = true
+    MainFrame.Size = UDim2.new(0, 0, 0, 0)
+    MainFrame.Position = UDim2.new(0.5, 0, 0.5, 0)
+    
+    TweenService:Create(MainFrame, TweenInfo.new(0.4, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
+        Size = UDim2.new(0, 340, 0, 420),
+        Position = UDim2.new(0.5, -170, 0.5, -210),
+        BackgroundTransparency = 0
+    }):Play()
+    TweenService:Create(MainStroke, TweenInfo.new(0.4), {Transparency = 0.1}):Play()
+    TweenService:Create(InnerStroke, TweenInfo.new(0.4), {Transparency = 0.7}):Play()
+end
+
+CloseBtn.MouseButton1Click:Connect(hideGui)
+DockBtn.MouseButton1Click:Connect(function()
+    if not dockDragging and not dockMoved then
+        showGui()
+    end
+end)
+
+--// ============ ГОРЯЧАЯ КЛАВИША ============
+UserInputService.InputBegan:Connect(function(input, processed)
+    if processed then return end
+    if input.KeyCode == HOTKEY then
+        if GuiHidden then
+            showGui()
+        else
+            hideGui()
+        end
+    end
+end)
+
+--// ============================================
+--// ПЕРЕТАСКИВАНИЕ (GUI, Dock, HUD)
+--// ============================================
+local dragging, dragInput, dragStart, startPos
+local dockDragging, dockDragInput, dockDragStart, dockStartPos, dockMoved
+local hudDragging, hudDragInput, hudDragStart, hudStartPos
+
+DragBar.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        dragging = true
+        dragStart = input.Position
+        startPos = MainFrame.Position
+        input.Changed:Connect(function()
+            if input.UserInputState == Enum.UserInputState.End then dragging = false end
+        end)
+    end
+end)
+DragBar.InputChanged:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+        dragInput = input
+    end
+end)
+
+DockBtn.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        dockDragging = true
+        dockMoved = false
+        dockDragStart = input.Position
+        dockStartPos = DockBtn.Position
+        input.Changed:Connect(function()
+            if input.UserInputState == Enum.UserInputState.End then
+                dockDragging = false
+                task.wait(0.05)
+                dockMoved = false
+            end
+        end)
+    end
+end)
+DockBtn.InputChanged:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+        dockDragInput = input
+    end
+end)
+
+HudFrame.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        hudDragging = true
+        hudDragStart = input.Position
+        hudStartPos = HudFrame.Position
+        input.Changed:Connect(function()
+            if input.UserInputState == Enum.UserInputState.End then
+                hudDragging = false
+            end
+        end)
+    end
+end)
+HudFrame.InputChanged:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+        hudDragInput = input
+    end
+end)
+
+UserInputService.InputChanged:Connect(function(input)
+    -- Главное GUI
+    if input == dragInput and dragging then
+        local delta = input.Position - dragStart
+        MainFrame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+    end
+    -- Dock
+    if input == dockDragInput and dockDragging then
+        local delta = input.Position - dockDragStart
+        if math.abs(delta.X) > 3 or math.abs(delta.Y) > 3 then
+            dockMoved = true
+        end
+        DockBtn.Position = UDim2.new(dockStartPos.X.Scale, dockStartPos.X.Offset + delta.X, dockStartPos.Y.Scale, dockStartPos.Y.Offset + delta.Y)
+    end
+    -- HUD
+    if input == hudDragInput and hudDragging then
+        local delta = input.Position - hudDragStart
+        HudFrame.Position = UDim2.new(hudStartPos.X.Scale, hudStartPos.X.Offset + delta.X, hudStartPos.Y.Scale, hudStartPos.Y.Offset + delta.Y)
+    end
+    -- Ресайз
+    if resizing then
+        local delta = input.Position - resizeStart
+        local newW = math.max(MIN_WIDTH, resizeStartSize.X + delta.X)
+        local newH = math.max(MIN_HEIGHT, resizeStartSize.Y + delta.Y)
+        MainFrame.Size = UDim2.new(0, newW, 0, newH)
+    end
+end)
+
+--// ============ КНОПКИ (клики) ============
 local function refreshStatus()
     ToggleStatus.Text = "AutoFarm: " .. (AutoFarmEnabled and "ON" or "OFF") ..
                         "  |  AutoAttack: " .. (AutoAttackEnabled and "ON" or "OFF")
@@ -758,7 +846,16 @@ end
 addHover(AutoFarmBtn, function() return AutoFarmEnabled end)
 addHover(AutoAttackBtn, function() return AutoAttackEnabled end)
 
--- ============ DROPDOWN ============
+DockBtn.MouseEnter:Connect(function()
+    TweenService:Create(DockBtn, TweenInfo.new(0.2), {BackgroundColor3 = THEME.ButtonOn}):Play()
+    TweenService:Create(DockBtn, TweenInfo.new(0.2), {Size = UDim2.new(0, 56, 0, 56)}):Play()
+end)
+DockBtn.MouseLeave:Connect(function()
+    TweenService:Create(DockBtn, TweenInfo.new(0.2), {BackgroundColor3 = THEME.Background}):Play()
+    TweenService:Create(DockBtn, TweenInfo.new(0.2), {Size = UDim2.new(0, 50, 0, 50)}):Play()
+end)
+
+--// ============ DROPDOWN ============
 local DropdownOpen = false
 
 local function rebuildDropdown()
@@ -834,31 +931,7 @@ TargetDropdown.MouseButton1Click:Connect(function()
     end
 end)
 
--- ============ ПЕРЕТАСКИВАНИЕ GUI ============
-local dragging, dragInput, dragStart, startPos
-DragBar.InputBegan:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-        dragging = true
-        dragStart = input.Position
-        startPos = MainFrame.Position
-        input.Changed:Connect(function()
-            if input.UserInputState == Enum.UserInputState.End then dragging = false end
-        end)
-    end
-end)
-DragBar.InputChanged:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
-        dragInput = input
-    end
-end)
-UserInputService.InputChanged:Connect(function(input)
-    if input == dragInput and dragging then
-        local delta = input.Position - dragStart
-        MainFrame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
-    end
-end)
-
--- ============ АНИМАЦИЯ ПОЯВЛЕНИЯ ============
+--// ============ АНИМАЦИЯ ПОЯВЛЕНИЯ ============
 local function tween(obj, time, props)
     return TweenService:Create(obj, TweenInfo.new(time, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), props)
 end
@@ -907,8 +980,10 @@ task.spawn(function()
     tween(DDArrow, 0.5, {TextTransparency = 0}):Play()
     tween(Footer, 0.5, {TextTransparency = 0}):Play()
     tween(CloseBtn, 0.5, {TextTransparency = 0, BackgroundTransparency = 0}):Play()
+    tween(ResizeIcon, 0.5, {TextTransparency = 0.2}):Play()
     
     refreshStatus()
 end)
 
-print("[JJS Script v3] Loaded for " .. LocalPlayer.Name)
+print("[JJS Script v4] Loaded for " .. LocalPlayer.Name)
+print("[JJS Script v4] Hotkey: RightShift — скрыть/показать GUI")
