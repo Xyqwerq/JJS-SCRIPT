@@ -1,6 +1,5 @@
 --// ============================================
---// JJS Script v12 for Delta Executor
---// + FIXED AutoAttack (mouse1click) | + CFrame-Step AutoFarm
+--// JJS Script v13 — Anti-Cheat Safe Pathfinding
 --// Made by Xyqwerq
 --// ============================================
 
@@ -17,6 +16,7 @@ local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
 local VirtualUser = game:GetService("VirtualUser")
 local VirtualInputManager = game:GetService("VirtualInputManager")
+local PathfindingService = game:GetService("PathfindingService")
 local LocalPlayer = Players.LocalPlayer
 local Mouse = LocalPlayer:GetMouse()
 
@@ -45,11 +45,13 @@ local MIN_HEIGHT = 320
 --// ============ НАСТРОЙКИ AUTOFARM ============
 local CONFIG = {
     FOLLOW_DISTANCE = 1.5,
-    STEP_INTERVAL   = 0.04,
-    STEP_SPEED      = 0.45,
-    MAX_STEP        = 2,
+    STEP_INTERVAL   = 0.05,
+    STEP_SPEED      = 0.35,
+    MAX_STEP        = 3,
     DEADZONE        = 1,
     JUMP_ON_STUCK   = true,
+    WALL_CHECK      = true,    -- ✅ проверка стен через raycast
+    REPATH_INTERVAL = 0.4,
 }
 
 --// ============ УДАЛЯЕМ СТАРЫЕ GUI ============
@@ -92,7 +94,7 @@ DragBar.Size = UDim2.new(1, -50, 0, 22)
 DragBar.BackgroundColor3 = THEME.BackgroundDark
 DragBar.BackgroundTransparency = 1
 DragBar.BorderSizePixel = 0
-DragBar.Text = "JJS Script v12"
+DragBar.Text = "JJS Script v13"
 DragBar.TextColor3 = THEME.Accent
 DragBar.Font = Enum.Font.GothamBold
 DragBar.TextSize = 11
@@ -374,7 +376,7 @@ local Footer = Instance.new("TextLabel")
 Footer.Size = UDim2.new(1, 0, 0, 12)
 Footer.Position = UDim2.new(0, 0, 1, -18)
 Footer.BackgroundTransparency = 1
-Footer.Text = "[RightShift] • AntiKick ON • v12"
+Footer.Text = "[RightShift] • AntiKick ON • v13"
 Footer.TextColor3 = Color3.fromRGB(120, 120, 130)
 Footer.Font = Enum.Font.Gotham
 Footer.TextSize = 9
@@ -582,10 +584,85 @@ task.spawn(function()
 end)
 
 --// ============================================
---// 🚀 AUTOFARM — CFrame Stepping
+--// 🚀 AUTOFARM v13 — Anti-Cheat Safe
 --// ============================================
 local stuckTimer = 0
 local lastPos = nil
+local currentPath = nil
+local currentWaypointIndex = 1
+local lastRepathTime = 0
+
+-- ✅ Raycast проверка стен
+local function hasWallBetween(fromPos, toPos)
+    local params = RaycastParams.new()
+    params.FilterType = Enum.RaycastFilterType.Exclude
+    params.FilterDescendantsInstances = {LocalPlayer.Character}
+    local result = workspace:Raycast(fromPos, toPos - fromPos, params)
+    return result ~= nil
+end
+
+-- ✅ Поиск обходного пути через PathfindingService
+local function computePath(fromPos, toPos)
+    local path = PathfindingService:CreatePath({
+        AgentRadius = 2,
+        AgentHeight = 5,
+        AgentCanJump = true,
+        AgentCanClimb = true,
+        WaypointSpacing = 4,
+    })
+    local ok = pcall(function()
+        path:ComputeAsync(fromPos, toPos)
+    end)
+    if ok and path.Status == Enum.PathStatus.Success then
+        return path
+    end
+    return nil
+end
+
+-- ✅ Безопасный шаг (не сквозь стену, а в обход)
+local function safeStepTo(targetPos)
+    local myChar = LocalPlayer.Character
+    if not myChar then return end
+    local myRoot = myChar:FindFirstChild("HumanoidRootPart")
+    if not myRoot then return end
+    
+    local myPos = myRoot.Position
+    local direction = (targetPos - myPos).Unit
+    local distance = (targetPos - myPos).Magnitude
+    local stepSize = math.min(distance * CONFIG.STEP_SPEED, CONFIG.MAX_STEP)
+    
+    -- Прямой путь
+    local directStep = myPos + direction * stepSize
+    
+    -- ✅ Если стена — пробуем обход через боковые направления
+    if CONFIG.WALL_CHECK and hasWallBetween(myPos + Vector3.new(0, 2, 0), directStep + Vector3.new(0, 2, 0)) then
+        -- Пробуем обход справа и слева
+        local rightDir = Vector3.new(direction.Z, 0, -direction.X)
+        local leftDir = Vector3.new(-direction.Z, 0, direction.X)
+        
+        local rightStep = myPos + rightDir * stepSize
+        local leftStep = myPos + leftDir * stepSize
+        
+        local rightFree = not hasWallBetween(myPos + Vector3.new(0, 2, 0), rightStep + Vector3.new(0, 2, 0))
+        local leftFree = not hasWallBetween(myPos + Vector3.new(0, 2, 0), leftStep + Vector3.new(0, 2, 0))
+        
+        if rightFree then
+            directStep = rightStep + direction * stepSize * 0.5
+        elseif leftFree then
+            directStep = leftStep + direction * stepSize * 0.5
+        else
+            -- Совсем застряли — прыжок
+            local hum = myChar:FindFirstChildOfClass("Humanoid")
+            if hum then pcall(function() hum.Jump = true end) end
+            return
+        end
+    end
+    
+    -- ✅ Плавно применяем CFrame (не резко)
+    local targetLook = Vector3.new(targetPos.X, directStep.Y, targetPos.Z)
+    local newCF = CFrame.new(directStep, targetLook)
+    myRoot.CFrame = myRoot.CFrame:Lerp(newCF, 0.6)
+end
 
 local function positionBehindTarget()
     if not AutoFarmEnabled then return end
@@ -613,19 +690,52 @@ local function positionBehindTarget()
         return
     end
 
-    local direction = (behindPos - myPos).Unit
-    local stepSize = math.min(dist * CONFIG.STEP_SPEED, CONFIG.MAX_STEP)
-    local newPos = myPos + direction * stepSize
+    -- ✅ Если путь прямой свободен — идём напрямую
+    if not hasWallBetween(myPos + Vector3.new(0, 2, 0), behindPos + Vector3.new(0, 2, 0)) then
+        safeStepTo(behindPos)
+    else
+        -- ✅ Есть стена — используем Pathfinding
+        local now = tick()
+        if now - lastRepathTime > CONFIG.REPATH_INTERVAL or not currentPath then
+            lastRepathTime = now
+            currentPath = computePath(myPos, behindPos)
+            currentWaypointIndex = 1
+        end
+        
+        if currentPath then
+            local waypoints = currentPath:GetWaypoints()
+            if currentWaypointIndex <= #waypoints then
+                local wp = waypoints[currentWaypointIndex]
+                if wp then
+                    -- Прыжок если waypoint требует
+                    if wp.Action == Enum.PathWaypointAction.Jump then
+                        pcall(function() myHum.Jump = true end)
+                    end
+                    
+                    local wpPos = wp.Position
+                    if (wpPos - myPos).Magnitude < 3 then
+                        currentWaypointIndex = currentWaypointIndex + 1
+                    else
+                        safeStepTo(wpPos)
+                    end
+                end
+            else
+                currentPath = nil
+            end
+        else
+            -- Фолбэк — прямой шаг
+            safeStepTo(behindPos)
+        end
+    end
 
-    local newCF = CFrame.new(newPos, Vector3.new(targetPos.X, newPos.Y, targetPos.Z))
-    myRoot.CFrame = newCF
-
+    -- Anti-stuck
     if CONFIG.JUMP_ON_STUCK then
         if lastPos and (myPos - lastPos).Magnitude < 0.3 then
             stuckTimer = stuckTimer + CONFIG.STEP_INTERVAL
-            if stuckTimer > 0.5 then
+            if stuckTimer > 0.6 then
                 pcall(function() myHum.Jump = true end)
                 stuckTimer = 0
+                currentPath = nil
             end
         else
             stuckTimer = 0
@@ -638,6 +748,7 @@ LocalPlayer.CharacterAdded:Connect(function()
     task.wait(1)
     stuckTimer = 0
     lastPos = nil
+    currentPath = nil
 end)
 
 task.spawn(function()
@@ -648,16 +759,15 @@ task.spawn(function()
         else
             stuckTimer = 0
             lastPos = nil
+            currentPath = nil
             task.wait(0.2)
         end
     end
 end)
 
 --// ============================================
---// ⚔️ AUTOATTACK v12 — FIXED
+--// ⚔️ AUTOATTACK v12
 --// ============================================
-
--- Метод 1: mouse1click() — нативный метод Delta
 local function clickMouse()
     pcall(function()
         if mouse1click then
@@ -670,7 +780,6 @@ local function clickMouse()
     end)
 end
 
--- Метод 2: VirtualUser с CaptureController
 local function virtualClick()
     pcall(function()
         VirtualUser:CaptureController()
@@ -678,7 +787,6 @@ local function virtualClick()
     end)
 end
 
--- Метод 3: Нажатие клавиш через VirtualInputManager
 local function pressKey(keyCode)
     pcall(function()
         VirtualInputManager:SendKeyEvent(true, keyCode, false, game)
@@ -687,7 +795,6 @@ local function pressKey(keyCode)
     end)
 end
 
--- Метод 4: Активация Tool'ов
 local function activateTools()
     local myChar = LocalPlayer.Character
     if not myChar then return end
@@ -696,19 +803,8 @@ local function activateTools()
             pcall(function() tool:Activate() end)
         end
     end
-    local backpack = LocalPlayer:FindFirstChild("Backpack")
-    if backpack then
-        for _, tool in ipairs(backpack:GetChildren()) do
-            if tool:IsA("Tool") then
-                pcall(function() tool.Parent = myChar end)
-                task.wait(0.02)
-                pcall(function() tool:Activate() end)
-            end
-        end
-    end
 end
 
--- Метод 5: Авто-скан и вызов attack remote'ов
 local function fireAllAttackRemotes()
     local targetChar = CurrentTarget and CurrentTarget.Character
     local keywords = {"attack", "hit", "m1", "combat", "damage", "swing", "punch", "melee"}
@@ -728,23 +824,17 @@ local function fireAllAttackRemotes()
                 pcall(function() obj:FireServer() end)
                 if targetChar then
                     pcall(function() obj:FireServer(targetChar) end)
-                    pcall(function() obj:FireServer(targetChar, "M1") end)
                 end
             elseif obj:IsA("RemoteFunction") and matches(obj.Name) then
                 pcall(function() obj:InvokeServer() end)
-                if targetChar then
-                    pcall(function() obj:InvokeServer(targetChar) end)
-                end
-            elseif obj:IsA("Folder") or obj:IsA("Model") or obj:IsA("Actor") then
+            elseif obj:IsA("Folder") or obj:IsA("Model") then
                 scanAndFire(obj, depth + 1)
             end
         end
     end
-    
     pcall(function() scanAndFire(game:GetService("ReplicatedStorage"), 0) end)
 end
 
--- Основная функция атаки
 local function tryAttack()
     if not CurrentTarget or not CurrentTarget.Character then return end
     local myChar = LocalPlayer.Character
@@ -762,32 +852,21 @@ local function tryAttack()
     local dist = (myRoot.Position - targetRoot.Position).Magnitude
     if dist > 15 then return end
 
-    -- ✅ Разворот к цели (важно для M1)
     pcall(function()
         myRoot.CFrame = CFrame.new(myRoot.Position, Vector3.new(targetRoot.Position.X, myRoot.Position.Y, targetRoot.Position.Z))
     end)
     task.wait(0.01)
 
-    -- 1) mouse1click
     clickMouse()
-
-    -- 2) VirtualUser
     virtualClick()
-
-    -- 3) Tool Activate
     activateTools()
-
-    -- 4) Keys 1-4
     pressKey(Enum.KeyCode.One)
     pressKey(Enum.KeyCode.Two)
     pressKey(Enum.KeyCode.Three)
     pressKey(Enum.KeyCode.Four)
-
-    -- 5) Remote'ы
     fireAllAttackRemotes()
 end
 
--- Основной цикл AutoAttack
 task.spawn(function()
     while true do
         if AutoAttackEnabled and CurrentTarget then
@@ -806,9 +885,7 @@ task.spawn(function()
     end
 end)
 
---// ============================================
---// 🛡️ ANTIKICK
---// ============================================
+--// ANTIKICK
 local antiKickEnabled = true
 
 LocalPlayer.Idled:Connect(function()
@@ -844,9 +921,7 @@ if mt then
     setreadonly(mt, true)
 end
 
---// ============================================
 --// СКРЫТИЕ / ПОКАЗ
---// ============================================
 local GuiHidden = false
 
 local function hideGui()
@@ -890,7 +965,6 @@ end
 
 CloseBtn.MouseButton1Click:Connect(hideGui)
 
---// Перетаскивание
 local dragging, dragInput, dragStart, startPos
 local dockDragging, dockDragInput, dockDragStart, dockStartPos, dockMoved
 local hudDragging, hudDragInput, hudDragStart, hudStartPos
@@ -981,7 +1055,6 @@ UserInputService.InputBegan:Connect(function(input, processed)
     end
 end)
 
---// Кнопки
 local function refreshStatus()
     ToggleStatus.Text = "AutoFarm: " .. (AutoFarmEnabled and "ON" or "OFF") ..
                         " | AutoAttack: " .. (AutoAttackEnabled and "ON" or "OFF")
@@ -1030,7 +1103,6 @@ DockBtn.MouseLeave:Connect(function()
     TweenService:Create(DockBtn, TweenInfo.new(0.2), {BackgroundColor3 = THEME.Background}):Play()
 end)
 
---// DROPDOWN
 local DropdownOpen = false
 
 local function rebuildDropdown()
@@ -1100,7 +1172,6 @@ TargetDropdown.MouseButton1Click:Connect(function()
     end
 end)
 
---// АНИМАЦИЯ
 local function tween(obj, time, props)
     return TweenService:Create(obj, TweenInfo.new(time, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), props)
 end
@@ -1159,5 +1230,5 @@ _G.JJS_CLEANUP = function()
     pcall(function() TargetHud:Destroy() end)
 end
 
-print("[JJS Script v12] Loaded for " .. LocalPlayer.Name)
-print("[JJS Script v12] Made by Xyqwerq | mouse1click AutoAttack")
+print("[JJS Script v13] Loaded for " .. LocalPlayer.Name)
+print("[JJS Script v13] Made by Xyqwerq | Anti-Cheat Safe")
