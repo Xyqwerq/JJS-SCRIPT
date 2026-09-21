@@ -377,7 +377,6 @@ local function makeInput(placeholder, y, default)
     box.Font = Enum.Font.GothamMedium
     box.TextSize = 11
     box.TextTransparency = 1
-    box.AutoButtonColor = false
     box.ClearTextOnFocus = false
     box.Parent = ScrollFrame
     local c = Instance.new("UICorner"); c.CornerRadius = UDim.new(0, 6); c.Parent = box
