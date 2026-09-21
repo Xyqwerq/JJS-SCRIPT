@@ -1,6 +1,6 @@
 --// ============================================
---// JJS Script v15.2 for Delta Executor
---// + AutoRejoin | + Persistent Config | + AutoSafeZone | + AutoServerHop
+--// JJS Script v15.3 for Delta Executor
+--// + Scrollable GUI | + AutoRejoin | + Persistent Config
 --// Made by Xyqwerq
 --// ============================================
 
@@ -46,17 +46,28 @@ local THEME = {
 }
 
 local HOTKEY = Enum.KeyCode.RightShift
-local GUI_W = 270
-local GUI_H = 640
-local MIN_WIDTH = 240
-local MIN_HEIGHT = 500
+local GUI_W = 260
+local GUI_H = 400
+local MIN_WIDTH = 220
+local MIN_HEIGHT = 250
+
+--// ============ AUTO-FIT TO SCREEN ============
+do
+    local viewport = workspace.CurrentCamera.ViewportSize
+    if GUI_H > viewport.Y - 80 then
+        GUI_H = viewport.Y - 80
+    end
+    if GUI_W > viewport.X - 40 then
+        GUI_W = viewport.X - 40
+    end
+end
 
 --// ============ CONFIG PATHS ============
 local CONFIG_FOLDER = "JJS_XyqwHub"
 local CONFIG_FILE = CONFIG_FOLDER .. "/config.json"
 local SCRIPT_URL = "https://raw.githubusercontent.com/Xyqwerq/JJS-SCRIPT/main/jjs_script.lua"
 
---// ============ FILE SYSTEM DETECTION ============
+--// ============ FILE SYSTEM ============
 local hasFileSystem = false
 pcall(function()
     if typeof(writefile) == "function" and typeof(readfile) == "function" and typeof(isfile) == "function" then
@@ -176,7 +187,7 @@ DragBar.Size = UDim2.new(1, -50, 0, 22)
 DragBar.BackgroundColor3 = THEME.BackgroundDark
 DragBar.BackgroundTransparency = 1
 DragBar.BorderSizePixel = 0
-DragBar.Text = "JJS Script v15.2"
+DragBar.Text = "JJS Script v15.3"
 DragBar.TextColor3 = THEME.Accent
 DragBar.Font = Enum.Font.GothamBold
 DragBar.TextSize = 11
@@ -262,16 +273,18 @@ ResizeHandle.InputBegan:Connect(function(input)
     end
 end)
 
---// SCROLL FRAME
+--// SCROLL FRAME (SCROLLABLE)
 local ScrollFrame = Instance.new("ScrollingFrame")
 ScrollFrame.Size = UDim2.new(1, 0, 1, -50)
 ScrollFrame.Position = UDim2.new(0, 0, 0, 26)
 ScrollFrame.BackgroundTransparency = 1
 ScrollFrame.BorderSizePixel = 0
-ScrollFrame.ScrollBarThickness = 3
+ScrollFrame.ScrollBarThickness = 4
 ScrollFrame.ScrollBarImageColor3 = THEME.Stroke
-ScrollFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
-ScrollFrame.AutomaticCanvasSize = Enum.AutomaticSize.Y
+ScrollFrame.ScrollBarImageTransparency = 0.2
+ScrollFrame.CanvasSize = UDim2.new(0, 0, 0, 550)
+ScrollFrame.ScrollingDirection = Enum.ScrollingDirection.Y
+ScrollFrame.ElasticBehavior = Enum.ElasticBehavior.WhenScrollable
 ScrollFrame.Parent = MainFrame
 
 --// HEADER
@@ -362,7 +375,6 @@ local function makeLabel(text, y, color, size)
     return lbl
 end
 
--- ✅ FIXED: убран AutoButtonColor (не существует у TextBox)
 local function makeInput(placeholder, y, default)
     local box = Instance.new("TextBox")
     box.Size = UDim2.new(0.5, -15, 0, 26)
@@ -487,7 +499,7 @@ local MinPlayersInput, MinPlayersStroke = makeInput("3", 486, "3")
 
 local Sep5 = makeSeparator(520)
 
---// FOOTER
+--// FOOTER (fixed on MainFrame)
 local CreditLabel = Instance.new("TextLabel")
 CreditLabel.Size = UDim2.new(1, 0, 0, 14)
 CreditLabel.Position = UDim2.new(0, 0, 1, -32)
@@ -504,7 +516,7 @@ local Footer = Instance.new("TextLabel")
 Footer.Size = UDim2.new(1, 0, 0, 12)
 Footer.Position = UDim2.new(0, 0, 1, -18)
 Footer.BackgroundTransparency = 1
-Footer.Text = "[RightShift] Hide • v15.2"
+Footer.Text = "[RightShift] Hide • v15.3"
 Footer.TextColor3 = Color3.fromRGB(120, 120, 130)
 Footer.Font = Enum.Font.Gotham
 Footer.TextSize = 9
@@ -1574,8 +1586,8 @@ _G.JJS_CLEANUP = function()
     pcall(function() TargetHud:Destroy() end)
 end
 
-print("[JJS Script v15.2] Loaded for " .. LocalPlayer.Name)
-print("[JJS Script v15.2] Made by Xyqwerq")
+print("[JJS Script v15.3] Loaded for " .. LocalPlayer.Name)
+print("[JJS Script v15.3] Made by Xyqwerq")
 if hasFileSystem then
     print("[JJS] File system: OK")
 else
