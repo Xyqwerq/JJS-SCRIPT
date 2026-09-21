@@ -1,6 +1,6 @@
 --// ============================================
---// JJS Script v2 for Delta Executor
---// + AutoAttack | + Target Selector | + Target HUD
+--// JJS Script v3 for Delta Executor
+--// + Close Button | + Dock Button | + Draggable HUD
 --// ============================================
 
 local Players = game:GetService("Players")
@@ -23,12 +23,11 @@ local THEME = {
     Red          = Color3.fromRGB(255, 90, 90),
 }
 
---// ============ УДАЛЯЕМ СТАРЫЙ GUI ============
-if game.CoreGui:FindFirstChild("JJSScriptGui") then
-    game.CoreGui.JJSScriptGui:Destroy()
-end
-if game.CoreGui:FindFirstChild("JJSTargetHud") then
-    game.CoreGui.JJSTargetHud:Destroy()
+--// ============ УДАЛЯЕМ СТАРЫЕ GUI ============
+for _, name in ipairs({"JJSScriptGui", "JJSTargetHud"}) do
+    if game.CoreGui:FindFirstChild(name) then
+        game.CoreGui[name]:Destroy()
+    end
 end
 
 --// ============================================
@@ -68,17 +67,43 @@ InnerStroke.Parent = MainFrame
 
 --// Заголовок (перетаскивание)
 local DragBar = Instance.new("TextLabel")
-DragBar.Size = UDim2.new(1, 0, 0, 28)
+DragBar.Size = UDim2.new(1, -40, 0, 28)
 DragBar.Position = UDim2.new(0, 0, 0, 0)
 DragBar.BackgroundColor3 = Color3.fromRGB(28, 28, 33)
 DragBar.BackgroundTransparency = 1
 DragBar.BorderSizePixel = 0
-DragBar.Text = "JJS Script v2"
+DragBar.Text = "JJS Script v3"
 DragBar.TextColor3 = THEME.Accent
 DragBar.Font = Enum.Font.GothamBold
 DragBar.TextSize = 13
 DragBar.TextTransparency = 1
 DragBar.Parent = MainFrame
+
+--// ============ КРЕСТИК (ЗАКРЫТИЕ) ============
+local CloseBtn = Instance.new("TextButton")
+CloseBtn.Name = "CloseBtn"
+CloseBtn.Size = UDim2.new(0, 24, 0, 24)
+CloseBtn.Position = UDim2.new(1, -32, 0, 4)
+CloseBtn.BackgroundColor3 = Color3.fromRGB(55, 55, 65)
+CloseBtn.BackgroundTransparency = 1
+CloseBtn.Text = "✕"
+CloseBtn.TextColor3 = THEME.Text
+CloseBtn.Font = Enum.Font.GothamBold
+CloseBtn.TextSize = 14
+CloseBtn.TextTransparency = 1
+CloseBtn.AutoButtonColor = false
+CloseBtn.Parent = MainFrame
+
+local CloseCorner = Instance.new("UICorner")
+CloseCorner.CornerRadius = UDim.new(0, 6)
+CloseCorner.Parent = CloseBtn
+
+CloseBtn.MouseEnter:Connect(function()
+    TweenService:Create(CloseBtn, TweenInfo.new(0.15), {BackgroundColor3 = THEME.Red}):Play()
+end)
+CloseBtn.MouseLeave:Connect(function()
+    TweenService:Create(CloseBtn, TweenInfo.new(0.15), {BackgroundColor3 = Color3.fromRGB(55, 55, 65)}):Play()
+end)
 
 --// ============ ГЛАВНЫЙ ТЕКСТ ============
 local HelloLabel = Instance.new("TextLabel")
@@ -229,7 +254,6 @@ DDStroke.Thickness = 1
 DDStroke.Transparency = 1
 DDStroke.Parent = TargetDropdown
 
--- Стрелка
 local DDArrow = Instance.new("TextLabel")
 DDArrow.Size = UDim2.new(0, 30, 1, 0)
 DDArrow.Position = UDim2.new(1, -30, 0, 0)
@@ -241,7 +265,6 @@ DDArrow.TextSize = 12
 DDArrow.TextTransparency = 1
 DDArrow.Parent = TargetDropdown
 
--- Список игроков (выпадающий)
 local DropdownList = Instance.new("ScrollingFrame")
 DropdownList.Size = UDim2.new(1, -40, 0, 0)
 DropdownList.Position = UDim2.new(0, 20, 0, 305)
@@ -275,7 +298,7 @@ local Footer = Instance.new("TextLabel")
 Footer.Size = UDim2.new(1, 0, 0, 16)
 Footer.Position = UDim2.new(0, 0, 1, -22)
 Footer.BackgroundTransparency = 1
-Footer.Text = "Delta Executor • JJS v2"
+Footer.Text = "Delta Executor • JJS v3"
 Footer.TextColor3 = Color3.fromRGB(120, 120, 130)
 Footer.Font = Enum.Font.Gotham
 Footer.TextSize = 11
@@ -283,8 +306,123 @@ Footer.TextTransparency = 1
 Footer.Parent = MainFrame
 
 --// ============================================
---// TARGET HUD (ник игрока сверху экрана)
+--// DOCK BUTTON (кнопка открытия)
 --// ============================================
+local DockBtn = Instance.new("TextButton")
+DockBtn.Name = "DockBtn"
+DockBtn.Size = UDim2.new(0, 50, 0, 50)
+DockBtn.Position = UDim2.new(0, 20, 0.5, -25)
+DockBtn.BackgroundColor3 = THEME.Background
+DockBtn.Text = "JJS"
+DockBtn.TextColor3 = THEME.Accent
+DockBtn.Font = Enum.Font.GothamBold
+DockBtn.TextSize = 16
+DockBtn.TextTransparency = 1
+DockBtn.BackgroundTransparency = 1
+DockBtn.AutoButtonColor = false
+DockBtn.Visible = false
+DockBtn.Parent = ScreenGui
+
+local DockCorner = Instance.new("UICorner")
+DockCorner.CornerRadius = UDim.new(0, 10)
+DockCorner.Parent = DockBtn
+
+local DockStroke = Instance.new("UIStroke")
+DockStroke.Color = THEME.Stroke
+DockStroke.Thickness = 2
+DockStroke.Transparency = 1
+DockStroke.Parent = DockBtn
+
+DockBtn.MouseEnter:Connect(function()
+    TweenService:Create(DockBtn, TweenInfo.new(0.2), {BackgroundColor3 = THEME.ButtonOn}):Play()
+    TweenService:Create(DockBtn, TweenInfo.new(0.2), {Size = UDim2.new(0, 56, 0, 56), Position = UDim2.new(0, 17, 0.5, -28)}):Play()
+end)
+DockBtn.MouseLeave:Connect(function()
+    TweenService:Create(DockBtn, TweenInfo.new(0.2), {BackgroundColor3 = THEME.Background}):Play()
+    TweenService:Create(DockBtn, TweenInfo.new(0.2), {Size = UDim2.new(0, 50, 0, 50), Position = UDim2.new(0, 20, 0.5, -25)}):Play()
+end)
+
+-- Перетаскивание док-кнопки
+local dockDragging, dockDragStart, dockStartPos
+DockBtn.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        dockDragging = true
+        dockDragStart = input.Position
+        dockStartPos = DockBtn.Position
+        input.Changed:Connect(function()
+            if input.UserInputState == Enum.UserInputState.End then
+                dockDragging = false
+            end
+        end)
+    end
+end)
+DockBtn.InputChanged:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+        dockDragInput = input
+    end
+end)
+
+-- ============ ФУНКЦИИ СКРЫТИЯ/ПОКАЗА ============
+local function hideGui()
+    -- Скрываем HUD
+    HudFrame.Visible = false
+    
+    -- Анимация исчезновения
+    TweenService:Create(MainFrame, TweenInfo.new(0.3, Enum.EasingStyle.Quart, Enum.EasingDirection.In), {
+        Size = UDim2.new(0, 0, 0, 0),
+        Position = UDim2.new(0.5, 0, 0.5, 0),
+        BackgroundTransparency = 1
+    }):Play()
+    TweenService:Create(MainStroke, TweenInfo.new(0.3), {Transparency = 1}):Play()
+    TweenService:Create(InnerStroke, TweenInfo.new(0.3), {Transparency = 1}):Play()
+    
+    task.wait(0.3)
+    MainFrame.Visible = false
+    
+    -- Показываем Dock Button
+    DockBtn.Visible = true
+    TweenService:Create(DockBtn, TweenInfo.new(0.4, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
+        BackgroundTransparency = 0,
+        TextTransparency = 0
+    }):Play()
+    TweenService:Create(DockStroke, TweenInfo.new(0.4), {Transparency = 0.2}):Play()
+end
+
+local function showGui()
+    -- Скрываем Dock Button
+    TweenService:Create(DockBtn, TweenInfo.new(0.25), {
+        BackgroundTransparency = 1,
+        TextTransparency = 1
+    }):Play()
+    TweenService:Create(DockStroke, TweenInfo.new(0.25), {Transparency = 1}):Play()
+    
+    task.wait(0.25)
+    DockBtn.Visible = false
+    
+    -- Показываем GUI
+    MainFrame.Visible = true
+    MainFrame.Size = UDim2.new(0, 0, 0, 0)
+    MainFrame.Position = UDim2.new(0.5, 0, 0.5, 0)
+    
+    TweenService:Create(MainFrame, TweenInfo.new(0.4, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
+        Size = UDim2.new(0, 340, 0, 420),
+        Position = UDim2.new(0.5, -170, 0.5, -210),
+        BackgroundTransparency = 0
+    }):Play()
+    TweenService:Create(MainStroke, TweenInfo.new(0.4), {Transparency = 0.1}):Play()
+    TweenService:Create(InnerStroke, TweenInfo.new(0.4), {Transparency = 0.7}):Play()
+end
+
+CloseBtn.MouseButton1Click:Connect(hideGui)
+DockBtn.MouseButton1Click:Connect(function()
+    if not dockDragging then
+        showGui()
+    end
+end)
+
+-- ============================================
+-- TARGET HUD (перетаскиваемый)
+-- ============================================
 local TargetHud = Instance.new("ScreenGui")
 TargetHud.Name = "JJSTargetHud"
 TargetHud.ResetOnSpawn = false
@@ -298,6 +436,7 @@ HudFrame.BackgroundColor3 = THEME.Background
 HudFrame.BackgroundTransparency = 0.15
 HudFrame.BorderSizePixel = 0
 HudFrame.Visible = false
+HudFrame.Active = true
 HudFrame.Parent = TargetHud
 
 local HudCorner = Instance.new("UICorner")
@@ -309,7 +448,6 @@ HudStroke.Color = THEME.Stroke
 HudStroke.Thickness = 1.5
 HudStroke.Parent = HudFrame
 
--- Аватар цели
 local HudAvatar = Instance.new("ImageLabel")
 HudAvatar.Size = UDim2.new(0, 36, 0, 36)
 HudAvatar.Position = UDim2.new(0, 6, 0, 6)
@@ -322,7 +460,6 @@ local AvCorner = Instance.new("UICorner")
 AvCorner.CornerRadius = UDim.new(1, 0)
 AvCorner.Parent = HudAvatar
 
--- Ник
 local HudName = Instance.new("TextLabel")
 HudName.Size = UDim2.new(1, -50, 0, 16)
 HudName.Position = UDim2.new(0, 48, 0, 7)
@@ -334,7 +471,6 @@ HudName.TextSize = 13
 HudName.TextXAlignment = Enum.TextXAlignment.Left
 HudName.Parent = HudFrame
 
--- HP Bar
 local HudHpBg = Instance.new("Frame")
 HudHpBg.Size = UDim2.new(1, -56, 0, 8)
 HudHpBg.Position = UDim2.new(0, 48, 0, 28)
@@ -367,15 +503,50 @@ HudHpText.TextSize = 9
 HudHpText.TextXAlignment = Enum.TextXAlignment.Left
 HudHpText.Parent = HudFrame
 
+--// ============ ПЕРЕТАСКИВАНИЕ HUD ============
+local hudDragging, hudDragInput, hudDragStart, hudStartPos
+HudFrame.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        hudDragging = true
+        hudDragStart = input.Position
+        hudStartPos = HudFrame.Position
+        input.Changed:Connect(function()
+            if input.UserInputState == Enum.UserInputState.End then
+                hudDragging = false
+            end
+        end)
+    end
+end)
+HudFrame.InputChanged:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+        hudDragInput = input
+    end
+end)
+UserInputService.InputChanged:Connect(function(input)
+    if input == hudDragInput and hudDragging then
+        local delta = input.Position - hudDragStart
+        HudFrame.Position = UDim2.new(
+            hudStartPos.X.Scale, hudStartPos.X.Offset + delta.X,
+            hudStartPos.Y.Scale, hudStartPos.Y.Offset + delta.Y
+        )
+    end
+    if input == dockDragInput and dockDragging then
+        local delta = input.Position - dockDragStart
+        DockBtn.Position = UDim2.new(
+            dockStartPos.X.Scale, dockStartPos.X.Offset + delta.X,
+            dockStartPos.Y.Scale, dockStartPos.Y.Offset + delta.Y
+        )
+    end
+end)
+
 --// ============================================
---// ЛОГИКА
+--// ЛОГИКА (AutoFarm / AutoAttack / Target)
 --// ============================================
 local AutoFarmEnabled = false
 local AutoAttackEnabled = false
 local CurrentTarget = nil
-local ManualTarget = nil -- выбранный вручную игрок
+local ManualTarget = nil
 
--- Получить живых игроков
 local function getAlivePlayers()
     local list = {}
     for _, p in ipairs(Players:GetPlayers()) do
@@ -389,14 +560,11 @@ local function getAlivePlayers()
     return list
 end
 
--- Найти ближайшего к нам
 local function getNearestPlayer()
     local myChar = LocalPlayer.Character
     if not myChar or not myChar:FindFirstChild("HumanoidRootPart") then return nil end
-    
     local myPos = myChar.HumanoidRootPart.Position
     local nearest, minDist = nil, math.huge
-    
     for _, p in ipairs(getAlivePlayers()) do
         local hrp = p.Character:FindFirstChild("HumanoidRootPart")
         if hrp then
@@ -410,7 +578,6 @@ local function getNearestPlayer()
     return nearest
 end
 
--- Сменить таргет
 local function switchTarget()
     if ManualTarget and ManualTarget.Character then
         local hum = ManualTarget.Character:FindFirstChildOfClass("Humanoid")
@@ -419,15 +586,11 @@ local function switchTarget()
             return
         end
     end
-    
-    -- Auto режим
     local alive = getAlivePlayers()
     if #alive == 0 then
         CurrentTarget = nil
         return
     end
-    
-    -- Ищем следующего, кроме текущего
     local nextT = nil
     for _, p in ipairs(alive) do
         if p ~= CurrentTarget then
@@ -436,11 +599,9 @@ local function switchTarget()
         end
     end
     if not nextT then nextT = alive[1] end
-    
     CurrentTarget = nextT
 end
 
--- Обновление Target HUD
 local function updateHud()
     if not CurrentTarget or not CurrentTarget.Character then
         HudFrame.Visible = false
@@ -451,13 +612,10 @@ local function updateHud()
         HudFrame.Visible = false
         return
     end
-    
     HudFrame.Visible = true
-    HudName.Text = CurrentTarget.Name .. " (@" .. CurrentTarget.DisplayName .. ")"
+    HudName.Text = CurrentTarget.Name
     HudHpText.Text = math.floor(hum.Health) .. " / " .. math.floor(hum.MaxHealth)
     HudHpFill.Size = UDim2.new(math.clamp(hum.Health / hum.MaxHealth, 0, 1), 0, 1, 0)
-    
-    -- Цвет HP
     local ratio = hum.Health / hum.MaxHealth
     if ratio > 0.6 then
         HudHpFill.BackgroundColor3 = THEME.Green
@@ -466,18 +624,14 @@ local function updateHud()
     else
         HudHpFill.BackgroundColor3 = THEME.Red
     end
-    
-    -- Аватар через thumbnails API
-    local userId = CurrentTarget.UserId
-    HudAvatar.Image = "https://www.roblox.com/headshot-thumbnail/image?userId=" .. userId .. "&width=150&height=150&format=png"
+    HudAvatar.Image = "https://www.roblox.com/headshot-thumbnail/image?userId=" .. CurrentTarget.UserId .. "&width=150&height=150&format=png"
 end
 
--- ============ СЛЕЖЕНИЕ ЗА СМЕРТЬЮ ЦЕЛИ ============
+-- Слежение за смертью
 task.spawn(function()
     while true do
         task.wait(0.3)
         if not AutoFarmEnabled and not AutoAttackEnabled then continue end
-        
         if CurrentTarget then
             local char = CurrentTarget.Character
             local hum = char and char:FindFirstChildOfClass("Humanoid")
@@ -491,47 +645,37 @@ task.spawn(function()
     end
 end)
 
--- ============ СТОЯТЬ СЗАДИ ЦЕЛИ ============
+-- Позиция сзади
 local function positionBehindTarget()
     if not AutoFarmEnabled then return end
     if not CurrentTarget or not CurrentTarget.Character then return end
-    
     local myChar = LocalPlayer.Character
     local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
     local targetRoot = CurrentTarget.Character:FindFirstChild("HumanoidRootPart")
     if not myRoot or not targetRoot then return end
-    
     local behindPos = targetRoot.CFrame * CFrame.new(0, 0, 3)
     myRoot.CFrame = myRoot.CFrame:Lerp(behindPos, 0.35)
 end
 
--- ============ AUTO ATTACK ============
--- Универсальный метод: клик через VirtualUser + активация инструмента
+-- AutoAttack
 local VirtualUser = game:GetService("VirtualUser")
 
 local function tryAttack()
     if not CurrentTarget or not CurrentTarget.Character then return end
-    
     local myChar = LocalPlayer.Character
     if not myChar then return end
-    
     local targetHum = CurrentTarget.Character:FindFirstChildOfClass("Humanoid")
     if not targetHum or targetHum.Health <= 0 then return end
-    
-    -- 1) Активируем текущий инструмент (если есть)
     local tool = myChar:FindFirstChildOfClass("Tool")
     if tool then
         pcall(function() tool:Activate() end)
     end
-    
-    -- 2) Симулируем клик мышью (для M1 атак)
     pcall(function()
         VirtualUser:CaptureController()
         VirtualUser:ClickButton1(Vector2.new(0, 0))
     end)
 end
 
--- Цикл авто-атаки
 task.spawn(function()
     while true do
         if AutoAttackEnabled then
@@ -540,7 +684,6 @@ task.spawn(function()
                 local hrp = CurrentTarget.Character:FindFirstChild("HumanoidRootPart")
                 local myChar = LocalPlayer.Character
                 local myHrp = myChar and myChar:FindFirstChild("HumanoidRootPart")
-                
                 if hum and hum.Health > 0 and hrp and myHrp then
                     local dist = (hrp.Position - myHrp.Position).Magnitude
                     if dist <= 15 then
@@ -555,7 +698,6 @@ task.spawn(function()
     end
 end)
 
--- ============ ЦИКЛ AUTOFARM ============
 task.spawn(function()
     while true do
         if AutoFarmEnabled then
@@ -567,7 +709,6 @@ task.spawn(function()
     end
 end)
 
--- ============ ОБНОВЛЕНИЕ HUD ============
 task.spawn(function()
     while true do
         updateHud()
@@ -579,11 +720,7 @@ end)
 local function refreshStatus()
     ToggleStatus.Text = "AutoFarm: " .. (AutoFarmEnabled and "ON" or "OFF") ..
                         "  |  AutoAttack: " .. (AutoAttackEnabled and "ON" or "OFF")
-    if AutoFarmEnabled or AutoAttackEnabled then
-        ToggleStatus.TextColor3 = THEME.Green
-    else
-        ToggleStatus.TextColor3 = THEME.Red
-    end
+    ToggleStatus.TextColor3 = (AutoFarmEnabled or AutoAttackEnabled) and THEME.Green or THEME.Red
 end
 
 AutoFarmBtn.MouseButton1Click:Connect(function()
@@ -606,7 +743,6 @@ AutoAttackBtn.MouseButton1Click:Connect(function()
     refreshStatus()
 end)
 
--- Ховер-эффекты
 local function addHover(btn, getState)
     btn.MouseEnter:Connect(function()
         TweenService:Create(btn, TweenInfo.new(0.2), {
@@ -622,15 +758,13 @@ end
 addHover(AutoFarmBtn, function() return AutoFarmEnabled end)
 addHover(AutoAttackBtn, function() return AutoAttackEnabled end)
 
--- ============ DROPDOWN — ВЫБОР ТАРГЕТА ============
+-- ============ DROPDOWN ============
 local DropdownOpen = false
 
 local function rebuildDropdown()
     for _, c in ipairs(DropdownList:GetChildren()) do
         if c:IsA("TextButton") then c:Destroy() end
     end
-    
-    -- Пункт "Auto"
     local autoBtn = Instance.new("TextButton")
     autoBtn.Size = UDim2.new(1, -4, 0, 26)
     autoBtn.BackgroundColor3 = Color3.fromRGB(60, 60, 70)
@@ -643,7 +777,6 @@ local function rebuildDropdown()
     autoBtn.AutoButtonColor = false
     autoBtn.Parent = DropdownList
     local c1 = Instance.new("UICorner"); c1.CornerRadius = UDim.new(0, 4); c1.Parent = autoBtn
-    
     autoBtn.MouseButton1Click:Connect(function()
         ManualTarget = nil
         TargetDropdown.Text = "Auto (Nearest)"
@@ -651,8 +784,6 @@ local function rebuildDropdown()
         DropdownList.Visible = false
         DropdownOpen = false
     end)
-    
-    -- Список игроков
     for _, p in ipairs(getAlivePlayers()) do
         local item = Instance.new("TextButton")
         item.Size = UDim2.new(1, -4, 0, 26)
@@ -666,21 +797,18 @@ local function rebuildDropdown()
         item.AutoButtonColor = false
         item.Parent = DropdownList
         local c2 = Instance.new("UICorner"); c2.CornerRadius = UDim.new(0, 4); c2.Parent = item
-        
         item.MouseEnter:Connect(function()
             TweenService:Create(item, TweenInfo.new(0.15), {BackgroundColor3 = THEME.ButtonOn, BackgroundTransparency = 0}):Play()
         end)
         item.MouseLeave:Connect(function()
             TweenService:Create(item, TweenInfo.new(0.15), {BackgroundColor3 = Color3.fromRGB(60, 60, 70), BackgroundTransparency = 0.4}):Play()
         end)
-        
         item.MouseButton1Click:Connect(function()
             ManualTarget = p
             CurrentTarget = p
             TargetDropdown.Text = p.Name
             DropdownList.Visible = false
             DropdownOpen = false
-            -- Автовключение функций при выборе цели
             if not AutoFarmEnabled and not AutoAttackEnabled then
                 AutoAttackEnabled = true
                 AutoAttackBtn.Text = "Disable AutoAttack"
@@ -689,8 +817,7 @@ local function rebuildDropdown()
             end
         end)
     end
-    
-    local contentH = (#DropdownList:GetChildren() - 1) * 28 -- минус UIListLayout
+    local contentH = (#DropdownList:GetChildren() - 1) * 28
     local maxH = 120
     DropdownList.CanvasSize = UDim2.new(0, 0, 0, math.max(contentH, 5))
     DropdownList.Size = UDim2.new(1, -40, 0, math.min(math.max(contentH, 26), maxH))
@@ -701,16 +828,13 @@ TargetDropdown.MouseButton1Click:Connect(function()
     if DropdownOpen then
         rebuildDropdown()
         DropdownList.Visible = true
-        DropdownList.Size = UDim2.new(1, -40, 0, DropdownList.Size.Y.Offset)
-        TweenService:Create(DropdownList, TweenInfo.new(0.25), {
-            BackgroundTransparency = 0.05
-        }):Play()
+        TweenService:Create(DropdownList, TweenInfo.new(0.25), {BackgroundTransparency = 0.05}):Play()
     else
         DropdownList.Visible = false
     end
 end)
 
--- ============ ПЕРЕТАСКИВАНИЕ ============
+-- ============ ПЕРЕТАСКИВАНИЕ GUI ============
 local dragging, dragInput, dragStart, startPos
 DragBar.InputBegan:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
@@ -761,7 +885,6 @@ task.spawn(function()
     task.wait(0.5)
     ScanLabel.Text = "Scanning Players..."
     tween(ScanLabel, 0.4, {TextTransparency = 0}):Play()
-    
     local total = #Players:GetPlayers()
     for i = 1, total do
         ScanLabel.Text = "Scanning Players.. " .. i .. "/" .. total
@@ -783,8 +906,9 @@ task.spawn(function()
     tween(DDStroke, 0.5, {Transparency = 0.3}):Play()
     tween(DDArrow, 0.5, {TextTransparency = 0}):Play()
     tween(Footer, 0.5, {TextTransparency = 0}):Play()
+    tween(CloseBtn, 0.5, {TextTransparency = 0, BackgroundTransparency = 0}):Play()
     
     refreshStatus()
 end)
 
-print("[JJS Script v2] Loaded for " .. LocalPlayer.Name)
+print("[JJS Script v3] Loaded for " .. LocalPlayer.Name)
