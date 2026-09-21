@@ -1,5 +1,5 @@
 --// ============================================
---// JJS Script v15.1 for Delta Executor
+--// JJS Script v15.2 for Delta Executor
 --// + AutoRejoin | + Persistent Config | + AutoSafeZone | + AutoServerHop
 --// Made by Xyqwerq
 --// ============================================
@@ -65,10 +65,10 @@ pcall(function()
 end)
 
 if not hasFileSystem then
-    warn("[JJS] File system not available. Settings won't persist across rejoin.")
+    warn("[JJS] File system not available. Settings won't persist.")
 end
 
---// ============ AUTOFARM CONFIG ============
+--// ============ CONFIGS ============
 local CONFIG = {
     FOLLOW_DISTANCE = 1.5,
     STEP_INTERVAL   = 0.04,
@@ -80,7 +80,6 @@ local CONFIG = {
     WAYPOINT_REACH  = 4,
 }
 
---// ============ SAFE ZONE CONFIG ============
 local SafeZoneConfig = {
     Enabled = false,
     MinHP   = 30,
@@ -90,7 +89,6 @@ local SafeZoneConfig = {
     ReturnPos = nil,
 }
 
---// ============ SERVER HOP CONFIG ============
 local ServerHopConfig = {
     Enabled = false,
     MinPlayers = 3,
@@ -98,13 +96,13 @@ local ServerHopConfig = {
     LastHop = 0,
 }
 
---// ============ STATE (declared early) ============
+--// ============ STATE ============
 local AutoFarmEnabled = false
 local AutoAttackEnabled = false
 local CurrentTarget = nil
 local ManualTarget = nil
 
---// ============ SAFE FILE HELPERS ============
+--// ============ FILE HELPERS ============
 local function saveConfig()
     if not hasFileSystem then return end
     local data = {
@@ -178,7 +176,7 @@ DragBar.Size = UDim2.new(1, -50, 0, 22)
 DragBar.BackgroundColor3 = THEME.BackgroundDark
 DragBar.BackgroundTransparency = 1
 DragBar.BorderSizePixel = 0
-DragBar.Text = "JJS Script v15.1"
+DragBar.Text = "JJS Script v15.2"
 DragBar.TextColor3 = THEME.Accent
 DragBar.Font = Enum.Font.GothamBold
 DragBar.TextSize = 11
@@ -364,6 +362,7 @@ local function makeLabel(text, y, color, size)
     return lbl
 end
 
+-- ✅ FIXED: убран AutoButtonColor (не существует у TextBox)
 local function makeInput(placeholder, y, default)
     local box = Instance.new("TextBox")
     box.Size = UDim2.new(0.5, -15, 0, 26)
@@ -505,7 +504,7 @@ local Footer = Instance.new("TextLabel")
 Footer.Size = UDim2.new(1, 0, 0, 12)
 Footer.Position = UDim2.new(0, 0, 1, -18)
 Footer.BackgroundTransparency = 1
-Footer.Text = "[RightShift] Hide • v15.1"
+Footer.Text = "[RightShift] Hide • v15.2"
 Footer.TextColor3 = Color3.fromRGB(120, 120, 130)
 Footer.Font = Enum.Font.Gotham
 Footer.TextSize = 9
@@ -539,9 +538,7 @@ DockStroke.Thickness = 1.5
 DockStroke.Transparency = 1
 DockStroke.Parent = DockBtn
 
---// ============================================
 --// TARGET HUD
---// ============================================
 local TargetHud = Instance.new("ScreenGui")
 TargetHud.Name = "JJSTargetHud"
 TargetHud.ResetOnSpawn = false
@@ -1022,7 +1019,7 @@ task.spawn(function()
     end
 end)
 
---// AUTO SERVER HOP WITH REJOIN
+--// AUTO SERVER HOP
 local function getServerList()
     local servers = {}
     local placeId = game.PlaceId
@@ -1081,7 +1078,7 @@ local function scheduleRejoinQueue()
     end
     
     if not queued then
-        warn("[JJS] queue_on_teleport недоступен!")
+        warn("[JJS] queue_on_teleport unavailable!")
     else
         print("[JJS] Rejoin queue scheduled ✓")
     end
@@ -1490,7 +1487,6 @@ task.spawn(function()
     ScanLabel.Text = "Scanning Players.. " .. total .. "/" .. total .. " ✓"
     task.wait(0.4)
 
-    -- RESTORE SETTINGS
     local saved = nil
     pcall(function() saved = loadConfig() end)
     if saved then
@@ -1578,10 +1574,10 @@ _G.JJS_CLEANUP = function()
     pcall(function() TargetHud:Destroy() end)
 end
 
-print("[JJS Script v15.1] Loaded for " .. LocalPlayer.Name)
-print("[JJS Script v15.1] Made by Xyqwerq")
+print("[JJS Script v15.2] Loaded for " .. LocalPlayer.Name)
+print("[JJS Script v15.2] Made by Xyqwerq")
 if hasFileSystem then
-    print("[JJS] File system: OK (settings will persist)")
+    print("[JJS] File system: OK")
 else
-    print("[JJS] File system: NOT AVAILABLE (settings won't persist)")
+    print("[JJS] File system: NOT AVAILABLE")
 end
