@@ -1,6 +1,6 @@
 --// ============================================
---// JJS Script v6 for Delta Executor
---// + Fast AutoFarm | + Pathfinding | + AntiKick
+--// JJS Script v7 for Delta Executor
+--// + Mobile-Friendly | + No-Teleport AutoFarm | + AntiKick
 --// Made by Xyqwerq
 --// ============================================
 
@@ -34,20 +34,30 @@ local THEME = {
 }
 
 local HOTKEY = Enum.KeyCode.RightShift
-local MIN_WIDTH = 300
-local MIN_HEIGHT = 380
 
---// ============ НАСТРОЙКИ АВТОФАРМА ============
+--// ============ 📱 МОБИЛЬНЫЕ НАСТРОЙКИ (компактные размеры) ============
+local GUI_W = 230          -- было 340
+local GUI_H = 340          -- было 440
+local MIN_WIDTH = 200
+local MIN_HEIGHT = 300
+local TEXT_HELLO = 16      -- было 22
+local TEXT_STATUS = 10     -- было 12
+local TEXT_BTN = 11        -- было 14
+local TEXT_TITLE = 11
+
+--// Авто-определение телефона
+local isMobile = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
+
+--// ============ НАСТРОЙКИ АВТОФАРМА (БЕЗ ТЕЛЕПОРТА) ============
 local CONFIG = {
     FOLLOW_DISTANCE  = 4,
-    MAX_SPEED        = 120,
-    ACCEL            = 0.4,
+    MAX_SPEED        = 90,      -- чуть снизили для античита
+    ACCEL            = 0.35,
     DEADZONE         = 3,
-    REPATH_INTERVAL  = 0.35,
-    WAYPOINT_REACH   = 4,
-    TELEPORT_IF_FAR  = 150,
-    TELEPORT_OFFSET  = 25,
+    REPATH_INTERVAL  = 0.3,
+    WAYPOINT_REACH   = 5,
     JUMP_ON_STUCK    = true,
+    -- ❌ TELEPORT полностью убран — только velocity
 }
 
 --// ============ УДАЛЯЕМ СТАРЫЕ GUI ============
@@ -67,8 +77,8 @@ ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 ScreenGui.Parent = game.CoreGui
 
 local MainFrame = Instance.new("Frame")
-MainFrame.Size = UDim2.new(0, 340, 0, 440)
-MainFrame.Position = UDim2.new(0.5, -170, 0.5, -220)
+MainFrame.Size = UDim2.new(0, GUI_W, 0, GUI_H)
+MainFrame.Position = UDim2.new(0.5, -GUI_W/2, 0.5, -GUI_H/2)
 MainFrame.BackgroundColor3 = THEME.Background
 MainFrame.BackgroundTransparency = 1
 MainFrame.BorderSizePixel = 0
@@ -76,12 +86,12 @@ MainFrame.ClipsDescendants = true
 MainFrame.Parent = ScreenGui
 
 local MainCorner = Instance.new("UICorner")
-MainCorner.CornerRadius = UDim.new(0, 12)
+MainCorner.CornerRadius = UDim.new(0, 10)
 MainCorner.Parent = MainFrame
 
 local MainStroke = Instance.new("UIStroke")
 MainStroke.Color = THEME.Stroke
-MainStroke.Thickness = 2
+MainStroke.Thickness = 1.5
 MainStroke.Transparency = 1
 MainStroke.Parent = MainFrame
 
@@ -91,28 +101,30 @@ InnerStroke.Thickness = 1
 InnerStroke.Transparency = 1
 InnerStroke.Parent = MainFrame
 
+--// Заголовок
 local DragBar = Instance.new("TextLabel")
-DragBar.Size = UDim2.new(1, -70, 0, 28)
+DragBar.Size = UDim2.new(1, -50, 0, 22)
+DragBar.Position = UDim2.new(0, 0, 0, 0)
 DragBar.BackgroundColor3 = Color3.fromRGB(28, 28, 33)
 DragBar.BackgroundTransparency = 1
 DragBar.BorderSizePixel = 0
-DragBar.Text = "JJS Script v6"
+DragBar.Text = "JJS Script v7"
 DragBar.TextColor3 = THEME.Accent
 DragBar.Font = Enum.Font.GothamBold
-DragBar.TextSize = 13
+DragBar.TextSize = 11
 DragBar.TextTransparency = 1
 DragBar.Parent = MainFrame
 
 --// КРЕСТИК
 local CloseBtn = Instance.new("TextButton")
-CloseBtn.Size = UDim2.new(0, 24, 0, 24)
-CloseBtn.Position = UDim2.new(1, -32, 0, 4)
+CloseBtn.Size = UDim2.new(0, 20, 0, 20)
+CloseBtn.Position = UDim2.new(1, -24, 0, 2)
 CloseBtn.BackgroundColor3 = Color3.fromRGB(55, 55, 65)
 CloseBtn.BackgroundTransparency = 1
 CloseBtn.Text = "✕"
 CloseBtn.TextColor3 = THEME.Text
 CloseBtn.Font = Enum.Font.GothamBold
-CloseBtn.TextSize = 14
+CloseBtn.TextSize = 12
 CloseBtn.TextTransparency = 1
 CloseBtn.AutoButtonColor = false
 CloseBtn.Parent = MainFrame
@@ -133,8 +145,8 @@ local resizing = false
 local resizeStart, resizeStartSize
 
 local ResizeHandle = Instance.new("TextButton")
-ResizeHandle.Size = UDim2.new(0, 16, 0, 16)
-ResizeHandle.Position = UDim2.new(1, -18, 1, -18)
+ResizeHandle.Size = UDim2.new(0, 14, 0, 14)
+ResizeHandle.Position = UDim2.new(1, -16, 1, -16)
 ResizeHandle.BackgroundColor3 = THEME.Stroke
 ResizeHandle.BackgroundTransparency = 1
 ResizeHandle.Text = ""
@@ -151,7 +163,7 @@ ResizeIcon.BackgroundTransparency = 1
 ResizeIcon.Text = "◢"
 ResizeIcon.TextColor3 = THEME.Stroke
 ResizeIcon.Font = Enum.Font.GothamBold
-ResizeIcon.TextSize = 14
+ResizeIcon.TextSize = 11
 ResizeIcon.TextTransparency = 1
 ResizeIcon.Parent = ResizeHandle
 
@@ -180,135 +192,135 @@ end)
 
 --// ТЕКСТ
 local HelloLabel = Instance.new("TextLabel")
-HelloLabel.Size = UDim2.new(1, -40, 0, 36)
-HelloLabel.Position = UDim2.new(0, 20, 0, 45)
+HelloLabel.Size = UDim2.new(1, -20, 0, 26)
+HelloLabel.Position = UDim2.new(0, 10, 0, 30)
 HelloLabel.BackgroundTransparency = 1
 HelloLabel.Text = ""
 HelloLabel.TextColor3 = THEME.Text
 HelloLabel.Font = Enum.Font.GothamBold
-HelloLabel.TextSize = 22
+HelloLabel.TextSize = TEXT_HELLO
 HelloLabel.TextTransparency = 1
 HelloLabel.TextXAlignment = Enum.TextXAlignment.Center
 HelloLabel.Parent = MainFrame
 
 local StatusLabel = Instance.new("TextLabel")
-StatusLabel.Size = UDim2.new(1, -40, 0, 16)
-StatusLabel.Position = UDim2.new(0, 20, 0, 82)
+StatusLabel.Size = UDim2.new(1, -20, 0, 12)
+StatusLabel.Position = UDim2.new(0, 10, 0, 58)
 StatusLabel.BackgroundTransparency = 1
 StatusLabel.Text = ""
 StatusLabel.TextColor3 = THEME.SubText
 StatusLabel.Font = Enum.Font.Gotham
-StatusLabel.TextSize = 12
+StatusLabel.TextSize = TEXT_STATUS
 StatusLabel.TextTransparency = 1
 StatusLabel.TextXAlignment = Enum.TextXAlignment.Center
 StatusLabel.Parent = MainFrame
 
 local ScanLabel = Instance.new("TextLabel")
-ScanLabel.Size = UDim2.new(1, -40, 0, 16)
-ScanLabel.Position = UDim2.new(0, 20, 0, 100)
+ScanLabel.Size = UDim2.new(1, -20, 0, 12)
+ScanLabel.Position = UDim2.new(0, 10, 0, 72)
 ScanLabel.BackgroundTransparency = 1
 ScanLabel.Text = ""
 ScanLabel.TextColor3 = THEME.Text
 ScanLabel.Font = Enum.Font.GothamMedium
-ScanLabel.TextSize = 12
+ScanLabel.TextSize = TEXT_STATUS
 ScanLabel.TextTransparency = 1
 ScanLabel.TextXAlignment = Enum.TextXAlignment.Center
 ScanLabel.Parent = MainFrame
 
 local function makeSeparator(y)
     local sep = Instance.new("Frame")
-    sep.Size = UDim2.new(1, -40, 0, 1)
-    sep.Position = UDim2.new(0, 20, 0, y)
+    sep.Size = UDim2.new(1, -20, 0, 1)
+    sep.Position = UDim2.new(0, 10, 0, y)
     sep.BackgroundColor3 = THEME.Stroke
     sep.BackgroundTransparency = 1
     sep.BorderSizePixel = 0
     sep.Parent = MainFrame
     return sep
 end
-local Sep1 = makeSeparator(122)
+local Sep1 = makeSeparator(92)
 
 --// КНОПКИ
 local AutoFarmBtn = Instance.new("TextButton")
-AutoFarmBtn.Size = UDim2.new(1, -40, 0, 36)
-AutoFarmBtn.Position = UDim2.new(0, 20, 0, 135)
+AutoFarmBtn.Size = UDim2.new(1, -20, 0, 28)
+AutoFarmBtn.Position = UDim2.new(0, 10, 0, 102)
 AutoFarmBtn.BackgroundColor3 = THEME.ButtonOff
 AutoFarmBtn.Text = "Enable AutoFarm"
 AutoFarmBtn.TextColor3 = THEME.Text
 AutoFarmBtn.Font = Enum.Font.GothamBold
-AutoFarmBtn.TextSize = 14
+AutoFarmBtn.TextSize = TEXT_BTN
 AutoFarmBtn.TextTransparency = 1
 AutoFarmBtn.BackgroundTransparency = 1
 AutoFarmBtn.AutoButtonColor = false
 AutoFarmBtn.Parent = MainFrame
 
 local BtnCorner = Instance.new("UICorner")
-BtnCorner.CornerRadius = UDim.new(0, 8)
+BtnCorner.CornerRadius = UDim.new(0, 6)
 BtnCorner.Parent = AutoFarmBtn
 
 local BtnStroke = Instance.new("UIStroke")
 BtnStroke.Color = THEME.Stroke
-BtnStroke.Thickness = 1.5
+BtnStroke.Thickness = 1
 BtnStroke.Transparency = 1
 BtnStroke.Parent = AutoFarmBtn
 
 local AutoAttackBtn = Instance.new("TextButton")
-AutoAttackBtn.Size = UDim2.new(1, -40, 0, 36)
-AutoAttackBtn.Position = UDim2.new(0, 20, 0, 180)
+AutoAttackBtn.Size = UDim2.new(1, -20, 0, 28)
+AutoAttackBtn.Position = UDim2.new(0, 10, 0, 136)
 AutoAttackBtn.BackgroundColor3 = THEME.ButtonOff
 AutoAttackBtn.Text = "Enable AutoAttack"
 AutoAttackBtn.TextColor3 = THEME.Text
 AutoAttackBtn.Font = Enum.Font.GothamBold
-AutoAttackBtn.TextSize = 14
+AutoAttackBtn.TextSize = TEXT_BTN
 AutoAttackBtn.TextTransparency = 1
 AutoAttackBtn.BackgroundTransparency = 1
 AutoAttackBtn.AutoButtonColor = false
 AutoAttackBtn.Parent = MainFrame
 
 local Btn2Corner = Instance.new("UICorner")
-Btn2Corner.CornerRadius = UDim.new(0, 8)
+Btn2Corner.CornerRadius = UDim.new(0, 6)
 Btn2Corner.Parent = AutoAttackBtn
 
 local Btn2Stroke = Instance.new("UIStroke")
 Btn2Stroke.Color = THEME.Stroke
-Btn2Stroke.Thickness = 1.5
+Btn2Stroke.Thickness = 1
 Btn2Stroke.Transparency = 1
 Btn2Stroke.Parent = AutoAttackBtn
 
 local ToggleStatus = Instance.new("TextLabel")
-ToggleStatus.Size = UDim2.new(1, -40, 0, 14)
-ToggleStatus.Position = UDim2.new(0, 20, 0, 220)
+ToggleStatus.Size = UDim2.new(1, -20, 0, 12)
+ToggleStatus.Position = UDim2.new(0, 10, 0, 170)
 ToggleStatus.BackgroundTransparency = 1
 ToggleStatus.Text = "AutoFarm: OFF  |  AutoAttack: OFF"
 ToggleStatus.TextColor3 = THEME.Red
 ToggleStatus.Font = Enum.Font.Gotham
-ToggleStatus.TextSize = 11
+ToggleStatus.TextSize = 9
 ToggleStatus.TextTransparency = 1
 ToggleStatus.TextXAlignment = Enum.TextXAlignment.Center
 ToggleStatus.Parent = MainFrame
 
-local Sep2 = makeSeparator(240)
+local Sep2 = makeSeparator(186)
 
 --// TARGET SELECTOR
 local TargetTitle = Instance.new("TextLabel")
-TargetTitle.Size = UDim2.new(1, -40, 0, 16)
-TargetTitle.Position = UDim2.new(0, 20, 0, 250)
+TargetTitle.Size = UDim2.new(1, -20, 0, 14)
+TargetTitle.Position = UDim2.new(0, 10, 0, 194)
 TargetTitle.BackgroundTransparency = 1
 TargetTitle.Text = "Target Selector"
 TargetTitle.TextColor3 = THEME.Accent
 TargetTitle.Font = Enum.Font.GothamBold
-TargetTitle.TextSize = 12
+TargetTitle.TextSize = TEXT_TITLE
 TargetTitle.TextTransparency = 1
 TargetTitle.TextXAlignment = Enum.TextXAlignment.Left
 TargetTitle.Parent = MainFrame
 
 local TargetDropdown = Instance.new("TextButton")
-TargetDropdown.Size = UDim2.new(1, -40, 0, 32)
-TargetDropdown.Position = UDim2.new(0, 20, 0, 270)
+TargetDropdown.Size = UDim2.new(1, -20, 0, 26)
+TargetDropdown.Position = UDim2.new(0, 10, 0, 210)
 TargetDropdown.BackgroundColor3 = THEME.ButtonOff
 TargetDropdown.Text = "Auto (Nearest)"
 TargetDropdown.TextColor3 = THEME.Text
 TargetDropdown.Font = Enum.Font.GothamMedium
-TargetDropdown.TextSize = 13
+TargetDropdown.TextSize = 11
 TargetDropdown.TextTransparency = 1
 TargetDropdown.BackgroundTransparency = 1
 TargetDropdown.AutoButtonColor = false
@@ -325,19 +337,19 @@ DDStroke.Transparency = 1
 DDStroke.Parent = TargetDropdown
 
 local DDArrow = Instance.new("TextLabel")
-DDArrow.Size = UDim2.new(0, 30, 1, 0)
-DDArrow.Position = UDim2.new(1, -30, 0, 0)
+DDArrow.Size = UDim2.new(0, 24, 1, 0)
+DDArrow.Position = UDim2.new(1, -24, 0, 0)
 DDArrow.BackgroundTransparency = 1
 DDArrow.Text = "▼"
 DDArrow.TextColor3 = THEME.Accent
 DDArrow.Font = Enum.Font.GothamBold
-DDArrow.TextSize = 12
+DDArrow.TextSize = 10
 DDArrow.TextTransparency = 1
 DDArrow.Parent = TargetDropdown
 
 local DropdownList = Instance.new("ScrollingFrame")
-DropdownList.Size = UDim2.new(1, -40, 0, 0)
-DropdownList.Position = UDim2.new(0, 20, 0, 305)
+DropdownList.Size = UDim2.new(1, -20, 0, 0)
+DropdownList.Position = UDim2.new(0, 10, 0, 240)
 DropdownList.BackgroundColor3 = Color3.fromRGB(45, 45, 52)
 DropdownList.BackgroundTransparency = 1
 DropdownList.BorderSizePixel = 0
@@ -363,29 +375,28 @@ UIListLayout.Padding = UDim.new(0, 2)
 UIListLayout.SortOrder = Enum.SortOrder.LayoutOrder
 UIListLayout.Parent = DropdownList
 
---// ============ ⭐ CREDIT "Made by Xyqwerq" ============
+--// ⭐ CREDIT
 local CreditLabel = Instance.new("TextLabel")
-CreditLabel.Name = "CreditLabel"
-CreditLabel.Size = UDim2.new(1, 0, 0, 18)
-CreditLabel.Position = UDim2.new(0, 0, 1, -40)
+CreditLabel.Size = UDim2.new(1, 0, 0, 14)
+CreditLabel.Position = UDim2.new(0, 0, 1, -32)
 CreditLabel.BackgroundTransparency = 1
 CreditLabel.Text = "Made by Xyqwerq"
 CreditLabel.TextColor3 = THEME.Credit
 CreditLabel.Font = Enum.Font.GothamBold
-CreditLabel.TextSize = 12
+CreditLabel.TextSize = 10
 CreditLabel.TextTransparency = 1
 CreditLabel.TextXAlignment = Enum.TextXAlignment.Center
 CreditLabel.Parent = MainFrame
 
---// ============ ФУТЕР ============
+--// ФУТЕР
 local Footer = Instance.new("TextLabel")
-Footer.Size = UDim2.new(1, 0, 0, 16)
-Footer.Position = UDim2.new(0, 0, 1, -22)
+Footer.Size = UDim2.new(1, 0, 0, 12)
+Footer.Position = UDim2.new(0, 0, 1, -18)
 Footer.BackgroundTransparency = 1
-Footer.Text = "[RightShift] Скрыть • AntiKick ON • v6"
+Footer.Text = "[RightShift] • AntiKick ON • v7"
 Footer.TextColor3 = Color3.fromRGB(120, 120, 130)
 Footer.Font = Enum.Font.Gotham
-Footer.TextSize = 11
+Footer.TextSize = 9
 Footer.TextTransparency = 1
 Footer.Parent = MainFrame
 
@@ -393,13 +404,13 @@ Footer.Parent = MainFrame
 --// DOCK BUTTON
 --// ============================================
 local DockBtn = Instance.new("TextButton")
-DockBtn.Size = UDim2.new(0, 50, 0, 50)
-DockBtn.Position = UDim2.new(0, 20, 0.5, -25)
+DockBtn.Size = UDim2.new(0, 40, 0, 40)
+DockBtn.Position = UDim2.new(0, 15, 0.5, -20)
 DockBtn.BackgroundColor3 = THEME.Background
 DockBtn.Text = "JJS"
 DockBtn.TextColor3 = THEME.Accent
 DockBtn.Font = Enum.Font.GothamBold
-DockBtn.TextSize = 16
+DockBtn.TextSize = 13
 DockBtn.TextTransparency = 1
 DockBtn.BackgroundTransparency = 1
 DockBtn.AutoButtonColor = false
@@ -413,12 +424,12 @@ DockCorner.Parent = DockBtn
 
 local DockStroke = Instance.new("UIStroke")
 DockStroke.Color = THEME.Stroke
-DockStroke.Thickness = 2
+DockStroke.Thickness = 1.5
 DockStroke.Transparency = 1
 DockStroke.Parent = DockBtn
 
 --// ============================================
---// TARGET HUD
+--// TARGET HUD (компактный)
 --// ============================================
 local TargetHud = Instance.new("ScreenGui")
 TargetHud.Name = "JJSTargetHud"
@@ -427,8 +438,8 @@ TargetHud.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 TargetHud.Parent = game.CoreGui
 
 local HudFrame = Instance.new("Frame")
-HudFrame.Size = UDim2.new(0, 220, 0, 48)
-HudFrame.Position = UDim2.new(0.5, -110, 0, 40)
+HudFrame.Size = UDim2.new(0, 170, 0, 38)
+HudFrame.Position = UDim2.new(0.5, -85, 0, 15)
 HudFrame.BackgroundColor3 = THEME.Background
 HudFrame.BackgroundTransparency = 0.15
 HudFrame.BorderSizePixel = 0
@@ -437,7 +448,7 @@ HudFrame.Active = true
 HudFrame.Parent = TargetHud
 
 local HudCorner = Instance.new("UICorner")
-HudCorner.CornerRadius = UDim.new(0, 10)
+HudCorner.CornerRadius = UDim.new(0, 8)
 HudCorner.Parent = HudFrame
 
 local HudStroke = Instance.new("UIStroke")
@@ -446,8 +457,8 @@ HudStroke.Thickness = 1.5
 HudStroke.Parent = HudFrame
 
 local HudAvatar = Instance.new("ImageLabel")
-HudAvatar.Size = UDim2.new(0, 36, 0, 36)
-HudAvatar.Position = UDim2.new(0, 6, 0, 6)
+HudAvatar.Size = UDim2.new(0, 28, 0, 28)
+HudAvatar.Position = UDim2.new(0, 5, 0, 5)
 HudAvatar.BackgroundColor3 = Color3.fromRGB(60, 60, 70)
 HudAvatar.BorderSizePixel = 0
 HudAvatar.Image = ""
@@ -458,25 +469,25 @@ AvCorner.CornerRadius = UDim.new(1, 0)
 AvCorner.Parent = HudAvatar
 
 local HudName = Instance.new("TextLabel")
-HudName.Size = UDim2.new(1, -50, 0, 16)
-HudName.Position = UDim2.new(0, 48, 0, 7)
+HudName.Size = UDim2.new(1, -40, 0, 12)
+HudName.Position = UDim2.new(0, 38, 0, 5)
 HudName.BackgroundTransparency = 1
 HudName.Text = "Target"
 HudName.TextColor3 = THEME.Text
 HudName.Font = Enum.Font.GothamBold
-HudName.TextSize = 13
+HudName.TextSize = 11
 HudName.TextXAlignment = Enum.TextXAlignment.Left
 HudName.Parent = HudFrame
 
 local HudHpBg = Instance.new("Frame")
-HudHpBg.Size = UDim2.new(1, -56, 0, 8)
-HudHpBg.Position = UDim2.new(0, 48, 0, 28)
+HudHpBg.Size = UDim2.new(1, -46, 0, 6)
+HudHpBg.Position = UDim2.new(0, 38, 0, 22)
 HudHpBg.BackgroundColor3 = Color3.fromRGB(50, 50, 58)
 HudHpBg.BorderSizePixel = 0
 HudHpBg.Parent = HudFrame
 
 local HudHpBgCorner = Instance.new("UICorner")
-HudHpBgCorner.CornerRadius = UDim.new(0, 4)
+HudHpBgCorner.CornerRadius = UDim.new(0, 3)
 HudHpBgCorner.Parent = HudHpBg
 
 local HudHpFill = Instance.new("Frame")
@@ -486,22 +497,22 @@ HudHpFill.BorderSizePixel = 0
 HudHpFill.Parent = HudHpBg
 
 local HudHpFillCorner = Instance.new("UICorner")
-HudHpFillCorner.CornerRadius = UDim.new(0, 4)
+HudHpFillCorner.CornerRadius = UDim.new(0, 3)
 HudHpFillCorner.Parent = HudHpFill
 
 local HudHpText = Instance.new("TextLabel")
-HudHpText.Size = UDim2.new(1, -56, 0, 10)
-HudHpText.Position = UDim2.new(0, 48, 0, 38)
+HudHpText.Size = UDim2.new(1, -46, 0, 10)
+HudHpText.Position = UDim2.new(0, 38, 0, 28)
 HudHpText.BackgroundTransparency = 1
 HudHpText.Text = "100 / 100"
 HudHpText.TextColor3 = THEME.SubText
 HudHpText.Font = Enum.Font.Gotham
-HudHpText.TextSize = 9
+HudHpText.TextSize = 8
 HudHpText.TextXAlignment = Enum.TextXAlignment.Left
 HudHpText.Parent = HudFrame
 
 --// ============================================
---// ЛОГИКА AUTOFARM / AUTOATTACK
+--// ЛОГИКА
 --// ============================================
 local AutoFarmEnabled = false
 local AutoAttackEnabled = false
@@ -588,7 +599,7 @@ task.spawn(function()
 end)
 
 --// ============================================
---// 🚀 FAST AUTOFARM — VELOCITY + PATHFINDING
+--// 🚀 AUTOFARM — БЕЗ ТЕЛЕПОРТА, ЧИСТО VELOCITY
 --// ============================================
 local followAttachment, followVelocity
 local currentPath = nil
@@ -596,6 +607,7 @@ local currentWaypointIndex = 1
 local lastRepathTime = 0
 local stuckTimer = 0
 local lastPos = nil
+local noMoveTime = 0  -- сколько времени цель далеко и мы не можем двигаться
 
 local function cleanupVelocity()
     if followVelocity then
@@ -655,7 +667,6 @@ local function getVelocity()
     end
 end
 
--- Построение пути
 local function computePath(fromPos, toPos)
     local path = PathfindingService:CreatePath({
         AgentRadius = 3,
@@ -673,7 +684,6 @@ local function computePath(fromPos, toPos)
     return nil
 end
 
--- Основная функция движения
 local function positionBehindTarget()
     if not AutoFarmEnabled then
         cleanupVelocity()
@@ -708,20 +718,17 @@ local function positionBehindTarget()
     local targetPos = targetRoot.Position
     local dist = (targetPos - myPos).Magnitude
 
-    -- УЛЬТРА-ДАЛЁКАЯ ЦЕЛЬ — телепорт поближе (безопасный, сбоку)
-    if dist > CONFIG.TELEPORT_IF_FAR then
-        local dir = (myPos - targetPos).Unit
-        local safePos = targetPos + dir * CONFIG.TELEPORT_OFFSET
-        myRoot.CFrame = CFrame.new(safePos)
-        task.wait(0.1)
+    -- ❌ ТЕЛЕПОРТ УБРАН ПОЛНОСТЬЮ
+    -- Если цель ОЧЕНЬ далеко (>200) — просто стоим и ждём (античит не тронет)
+    if dist > 200 then
+        setVelocity(Vector3.zero)
         return
     end
 
-    -- ЦЕЛЬ РЯДОМ — просто идём напрямую к позиции сзади
+    -- ЦЕЛЬ РЯДОМ (<20) — прямое velocity-движение
     local behindPos = targetRoot.CFrame * CFrame.new(0, 0, CONFIG.FOLLOW_DISTANCE)
     local targetWaypoint = behindPos.Position
 
-    -- Если цель ближе определённого расстояния — идём напрямую
     if dist < 20 then
         local toTarget = targetWaypoint - myPos
         local d = toTarget.Magnitude
@@ -735,7 +742,6 @@ local function positionBehindTarget()
         local desired = dir * speed
         setVelocity(getVelocity():Lerp(desired, CONFIG.ACCEL))
 
-        -- Jump если застряли
         if CONFIG.JUMP_ON_STUCK then
             if lastPos and (myPos - lastPos).Magnitude < 0.5 then
                 stuckTimer = stuckTimer + 0.05
@@ -751,7 +757,7 @@ local function positionBehindTarget()
         return
     end
 
-    -- ДАЛЁКАЯ ЦЕЛЬ — используем Pathfinding
+    -- ДАЛЁКАЯ ЦЕЛЬ (20-200) — Pathfinding
     local now = tick()
     if now - lastRepathTime > CONFIG.REPATH_INTERVAL or not currentPath then
         lastRepathTime = now
@@ -760,7 +766,6 @@ local function positionBehindTarget()
     end
 
     if not currentPath then
-        -- Фолбэк — прямое движение
         local dir = (targetWaypoint - myPos).Unit
         setVelocity(getVelocity():Lerp(dir * CONFIG.MAX_SPEED, CONFIG.ACCEL))
         return
@@ -775,7 +780,6 @@ local function positionBehindTarget()
     local wp = waypoints[currentWaypointIndex]
     if not wp then return end
 
-    -- Jump если waypoint требует прыжка
     if wp.Action == Enum.PathWaypointAction.Jump then
         pcall(function() myHum.Jump = true end)
     end
@@ -784,19 +788,16 @@ local function positionBehindTarget()
     local toWp = wpPos - myPos
     local dWp = toWp.Magnitude
 
-    -- Достигли waypoint — идём к следующему
     if dWp < CONFIG.WAYPOINT_REACH then
         currentWaypointIndex = currentWaypointIndex + 1
         return
     end
 
-    -- Плавное движение к waypoint
     local dir = toWp.Unit
     local speed = math.clamp(dWp * 4, 30, CONFIG.MAX_SPEED)
     local desired = dir * speed
     setVelocity(getVelocity():Lerp(desired, CONFIG.ACCEL))
 
-    -- Anti-stuck
     if lastPos and (myPos - lastPos).Magnitude < 0.3 then
         stuckTimer = stuckTimer + 0.05
         if stuckTimer > 0.6 then
@@ -873,7 +874,7 @@ task.spawn(function()
 end)
 
 --// ============================================
---// 🛡️ ANTIKICK / ANTI-AFK
+--// 🛡️ ANTIKICK
 --// ============================================
 local antiKickEnabled = true
 
@@ -930,7 +931,7 @@ task.spawn(function()
 end)
 
 --// ============================================
---// СКРЫТИЕ / ПОКАЗ GUI
+--// СКРЫТИЕ / ПОКАЗ
 --// ============================================
 local GuiHidden = false
 
@@ -967,8 +968,8 @@ local function showGui()
     MainFrame.Size = UDim2.new(0, 0, 0, 0)
     MainFrame.Position = UDim2.new(0.5, 0, 0.5, 0)
     TweenService:Create(MainFrame, TweenInfo.new(0.4, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
-        Size = UDim2.new(0, 340, 0, 440),
-        Position = UDim2.new(0.5, -170, 0.5, -220),
+        Size = UDim2.new(0, GUI_W, 0, GUI_H),
+        Position = UDim2.new(0.5, -GUI_W/2, 0.5, -GUI_H/2),
         BackgroundTransparency = 0
     }):Play()
     TweenService:Create(MainStroke, TweenInfo.new(0.4), {Transparency = 0.1}):Play()
@@ -1061,7 +1062,6 @@ UserInputService.InputChanged:Connect(function(input)
     end
 end)
 
---// Горячая клавиша
 UserInputService.InputBegan:Connect(function(input, processed)
     if processed then return end
     if input.KeyCode == HOTKEY then
@@ -1072,7 +1072,7 @@ end)
 --// Кнопки
 local function refreshStatus()
     ToggleStatus.Text = "AutoFarm: " .. (AutoFarmEnabled and "ON" or "OFF") ..
-                        "  |  AutoAttack: " .. (AutoAttackEnabled and "ON" or "OFF")
+                        " | AutoAttack: " .. (AutoAttackEnabled and "ON" or "OFF")
     ToggleStatus.TextColor3 = (AutoFarmEnabled or AutoAttackEnabled) and THEME.Green or THEME.Red
 end
 
@@ -1118,11 +1118,11 @@ addHover(AutoAttackBtn, function() return AutoAttackEnabled end)
 
 DockBtn.MouseEnter:Connect(function()
     TweenService:Create(DockBtn, TweenInfo.new(0.2), {BackgroundColor3 = THEME.ButtonOn}):Play()
-    TweenService:Create(DockBtn, TweenInfo.new(0.2), {Size = UDim2.new(0, 56, 0, 56)}):Play()
+    TweenService:Create(DockBtn, TweenInfo.new(0.2), {Size = UDim2.new(0, 46, 0, 46)}):Play()
 end)
 DockBtn.MouseLeave:Connect(function()
     TweenService:Create(DockBtn, TweenInfo.new(0.2), {BackgroundColor3 = THEME.Background}):Play()
-    TweenService:Create(DockBtn, TweenInfo.new(0.2), {Size = UDim2.new(0, 50, 0, 50)}):Play()
+    TweenService:Create(DockBtn, TweenInfo.new(0.2), {Size = UDim2.new(0, 40, 0, 40)}):Play()
 end)
 
 --// DROPDOWN
@@ -1133,13 +1133,13 @@ local function rebuildDropdown()
         if c:IsA("TextButton") then c:Destroy() end
     end
     local autoBtn = Instance.new("TextButton")
-    autoBtn.Size = UDim2.new(1, -4, 0, 26)
+    autoBtn.Size = UDim2.new(1, -4, 0, 22)
     autoBtn.BackgroundColor3 = Color3.fromRGB(60, 60, 70)
     autoBtn.BackgroundTransparency = 0.4
     autoBtn.Text = "  Auto (Nearest)"
     autoBtn.TextColor3 = THEME.Accent
     autoBtn.Font = Enum.Font.GothamMedium
-    autoBtn.TextSize = 12
+    autoBtn.TextSize = 10
     autoBtn.TextXAlignment = Enum.TextXAlignment.Left
     autoBtn.AutoButtonColor = false
     autoBtn.Parent = DropdownList
@@ -1153,13 +1153,13 @@ local function rebuildDropdown()
     end)
     for _, p in ipairs(getAlivePlayers()) do
         local item = Instance.new("TextButton")
-        item.Size = UDim2.new(1, -4, 0, 26)
+        item.Size = UDim2.new(1, -4, 0, 22)
         item.BackgroundColor3 = Color3.fromRGB(60, 60, 70)
         item.BackgroundTransparency = 0.4
         item.Text = "  " .. p.Name
         item.TextColor3 = THEME.Text
         item.Font = Enum.Font.Gotham
-        item.TextSize = 12
+        item.TextSize = 10
         item.TextXAlignment = Enum.TextXAlignment.Left
         item.AutoButtonColor = false
         item.Parent = DropdownList
@@ -1178,10 +1178,10 @@ local function rebuildDropdown()
             DropdownOpen = false
         end)
     end
-    local contentH = (#DropdownList:GetChildren() - 1) * 28
-    local maxH = 120
+    local contentH = (#DropdownList:GetChildren() - 1) * 24
+    local maxH = 100
     DropdownList.CanvasSize = UDim2.new(0, 0, 0, math.max(contentH, 5))
-    DropdownList.Size = UDim2.new(1, -40, 0, math.min(math.max(contentH, 26), maxH))
+    DropdownList.Size = UDim2.new(1, -20, 0, math.min(math.max(contentH, 22), maxH))
 end
 
 TargetDropdown.MouseButton1Click:Connect(function()
@@ -1212,7 +1212,7 @@ task.spawn(function()
     HelloLabel.Text = "Hello, " .. LocalPlayer.Name
     tween(HelloLabel, 0.6, {TextTransparency = 0}):Play()
     local origPos = HelloLabel.Position
-    HelloLabel.Position = UDim2.new(0, 20, 0, 60)
+    HelloLabel.Position = UDim2.new(0, 10, 0, 40)
     tween(HelloLabel, 0.6, {Position = origPos}):Play()
 
     task.wait(0.3)
@@ -1242,7 +1242,7 @@ task.spawn(function()
     tween(TargetDropdown, 0.5, {TextTransparency = 0, BackgroundTransparency = 0}):Play()
     tween(DDStroke, 0.5, {Transparency = 0.3}):Play()
     tween(DDArrow, 0.5, {TextTransparency = 0}):Play()
-    tween(CreditLabel, 0.6, {TextTransparency = 0}):Play()   -- ⭐ Credit fade in
+    tween(CreditLabel, 0.6, {TextTransparency = 0}):Play()
     tween(Footer, 0.5, {TextTransparency = 0}):Play()
     tween(CloseBtn, 0.5, {TextTransparency = 0, BackgroundTransparency = 0}):Play()
     tween(ResizeIcon, 0.5, {TextTransparency = 0.2}):Play()
@@ -1250,12 +1250,11 @@ task.spawn(function()
     refreshStatus()
 end)
 
---// CLEANUP при повторном запуске
 _G.JJS_CLEANUP = function()
     pcall(function() cleanupVelocity() end)
     pcall(function() ScreenGui:Destroy() end)
     pcall(function() TargetHud:Destroy() end)
 end
 
-print("[JJS Script v6] Loaded for " .. LocalPlayer.Name)
-print("[JJS Script v6] Made by Xyqwerq")
+print("[JJS Script v7] Loaded for " .. LocalPlayer.Name)
+print("[JJS Script v7] Made by Xyqwerq | Mobile-friendly")
