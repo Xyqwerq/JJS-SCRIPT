@@ -1,6 +1,6 @@
 --// ============================================
---// JJS Script v18 for Delta Executor
---// + Fast AutoAttack (No Mouse Move) | + Fast Movement
+--// JJS Script v19 for Delta Executor
+--// + Fast AutoAttack (F/Q/G keys) | + Fast Movement
 --// Made by Xyqwerq
 --// ============================================
 
@@ -87,11 +87,12 @@ local CONFIG = {
 
 -- ✅ ATTACK CONFIG
 local AttackConfig = {
-    SpamDelay = 0.05,       -- ✅ 20 кликов в секунду
-    UseRemote = true,       -- ✅ использовать remote'ы
-    UseClick = true,        -- ✅ использовать клики без перемещения мыши
-    UseKeys = true,         -- ✅ нажимать 1,2,3,4
-    UseTools = true,        -- ✅ активировать Tool'ы
+    SpamDelay = 0.05,       -- 20 циклов в секунду
+    UseRemote = true,       -- использовать remote'ы
+    UseClick = true,        -- спам ЛКМ (без движения мыши)
+    UseKeys = true,         -- нажимать 1,2,3,4
+    UseTools = true,        -- активировать Tool'ы
+    UseCombatKeys = true,   -- ✅ Q, G каждый цикл + F иногда
 }
 
 -- ✅ TARGET LOCK
@@ -187,7 +188,7 @@ DragBar.Size = UDim2.new(1, -50, 0, 22)
 DragBar.BackgroundColor3 = THEME.BackgroundDark
 DragBar.BackgroundTransparency = 1
 DragBar.BorderSizePixel = 0
-DragBar.Text = "JJS Script v18"
+DragBar.Text = "JJS Script v19"
 DragBar.TextColor3 = THEME.Accent
 DragBar.Font = Enum.Font.GothamBold
 DragBar.TextSize = 11
@@ -491,7 +492,7 @@ local Footer = Instance.new("TextLabel")
 Footer.Size = UDim2.new(1, 0, 0, 12)
 Footer.Position = UDim2.new(0, 0, 1, -18)
 Footer.BackgroundTransparency = 1
-Footer.Text = "[RightShift] Hide • v18"
+Footer.Text = "[RightShift] Hide • v19"
 Footer.TextColor3 = Color3.fromRGB(120, 120, 130)
 Footer.Font = Enum.Font.Gotham
 Footer.TextSize = 9
@@ -922,27 +923,25 @@ task.spawn(function()
 end)
 
 --// ============================================
---// ⚔️ AUTOATTACK v18 — FAST + NO MOUSE MOVE
+--// ⚔️ AUTOATTACK v19 — F, Q, G keys added
 --// ============================================
-local VirtualInputManager = game:GetService("VirtualInputManager")
 
 -- ✅ Клик через VirtualInputManager (НЕ двигает курсор!)
 local function spamClick()
     pcall(function()
-        -- Отправляем клик на текущую позицию мыши БЕЗ её перемещения
         local vpSize = Camera.ViewportSize
         VirtualInputManager:SendMouseButtonEvent(
-            vpSize.X / 2, vpSize.Y / 2,  -- координаты (центр экрана)
-            0,                            -- mouse wheel
-            true,                         -- mouse down
-            game,                         -- sender
-            0                             -- mouse button (0 = left)
+            vpSize.X / 2, vpSize.Y / 2,
+            0,
+            true,
+            game,
+            0
         )
         task.wait(0.01)
         VirtualInputManager:SendMouseButtonEvent(
             vpSize.X / 2, vpSize.Y / 2,
             0,
-            false,                        -- mouse up
+            false,
             game,
             0
         )
@@ -960,13 +959,41 @@ local function activateTools()
     end
 end
 
--- ✅ Нажатие клавиш 1-4
+-- ✅ Нажатие клавиш
 local function pressKey(keyCode)
     pcall(function()
         VirtualInputManager:SendKeyEvent(true, keyCode, false, game)
         task.wait(0.01)
         VirtualInputManager:SendKeyEvent(false, keyCode, false, game)
     end)
+end
+
+-- ✅ НОВОЕ: Спам Q, G + иногда F
+local fCounter = 0
+local function pressCombatKeys()
+    -- Q — каждый цикл (спам)
+    pcall(function()
+        VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.Q, false, game)
+        task.wait(0.01)
+        VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.Q, false, game)
+    end)
+    -- G — каждый цикл (спам)
+    pcall(function()
+        VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.G, false, game)
+        task.wait(0.01)
+        VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.G, false, game)
+    end)
+    
+    -- F — иногда (каждый 5-й цикл)
+    fCounter = fCounter + 1
+    if fCounter >= 5 then
+        fCounter = 0
+        pcall(function()
+            VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.F, false, game)
+            task.wait(0.01)
+            VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.F, false, game)
+        end)
+    end
 end
 
 -- ✅ Вызов remote'ов атаки
@@ -1018,7 +1045,7 @@ local function fireAttackRemotes()
     end
 end
 
--- ✅ Основная функция атаки — вызывается в цикле
+-- ✅ Основная функция атаки
 local function tryAttack()
     if not CurrentTarget or not CurrentTarget.Character then return end
     local myChar = LocalPlayer.Character
@@ -1036,13 +1063,12 @@ local function tryAttack()
     local dist = (myRoot.Position - targetRoot.Position).Magnitude
     if dist > 15 then return end
 
-    -- Поворот к цели (без смены позиции)
     pcall(function()
         myRoot.CFrame = CFrame.new(myRoot.Position, Vector3.new(targetRoot.Position.X, myRoot.Position.Y, targetRoot.Position.Z))
     end)
     task.wait(0.005)
 
-    -- ✅ Спамим всеми способами одновременно
+    -- Спамим всеми способами
     if AttackConfig.UseClick then
         spamClick()
     end
@@ -1058,9 +1084,12 @@ local function tryAttack()
         pressKey(Enum.KeyCode.Three)
         pressKey(Enum.KeyCode.Four)
     end
+    -- ✅ Q, G каждый цикл + F иногда
+    if AttackConfig.UseCombatKeys then
+        pressCombatKeys()
+    end
 end
 
--- ✅ Быстрый цикл атаки (20 раз/сек)
 task.spawn(function()
     while true do
         if AutoAttackEnabled and CurrentTarget then
@@ -1540,7 +1569,7 @@ task.spawn(function()
         end
     end
 
-    StatusLabel.Text = "Loaded • v18"
+    StatusLabel.Text = "Loaded • v19"
     StatusLabel.TextColor3 = THEME.Green
 
     tween(AutoFarmBtn, 0.5, {TextTransparency = 0, BackgroundTransparency = 0}):Play()
@@ -1574,5 +1603,5 @@ _G.JJS_CLEANUP = function()
     pcall(function() TargetHud:Destroy() end)
 end
 
-print("[JJS Script v18] Loaded for " .. LocalPlayer.Name)
-print("[JJS Script v18] Made by Xyqwerq | Fast AutoAttack (No Mouse Move)")
+print("[JJS Script v19] Loaded for " .. LocalPlayer.Name)
+print("[JJS Script v19] Made by Xyqwerq | F, Q, G keys added")
