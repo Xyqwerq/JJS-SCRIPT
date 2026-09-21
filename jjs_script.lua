@@ -1,6 +1,6 @@
 --// ============================================
---// JJS Script v11 for Delta Executor
---// + WORKING AutoAttack (Multi-Method) | + CFrame-Step AutoFarm
+--// JJS Script v12 for Delta Executor
+--// + FIXED AutoAttack (mouse1click) | + CFrame-Step AutoFarm
 --// Made by Xyqwerq
 --// ============================================
 
@@ -16,6 +16,7 @@ local RunService = game:GetService("RunService")
 local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
 local VirtualUser = game:GetService("VirtualUser")
+local VirtualInputManager = game:GetService("VirtualInputManager")
 local LocalPlayer = Players.LocalPlayer
 local Mouse = LocalPlayer:GetMouse()
 
@@ -43,7 +44,7 @@ local MIN_HEIGHT = 320
 
 --// ============ НАСТРОЙКИ AUTOFARM ============
 local CONFIG = {
-    FOLLOW_DISTANCE = 1.5,     -- очень близко
+    FOLLOW_DISTANCE = 1.5,
     STEP_INTERVAL   = 0.04,
     STEP_SPEED      = 0.45,
     MAX_STEP        = 2,
@@ -91,7 +92,7 @@ DragBar.Size = UDim2.new(1, -50, 0, 22)
 DragBar.BackgroundColor3 = THEME.BackgroundDark
 DragBar.BackgroundTransparency = 1
 DragBar.BorderSizePixel = 0
-DragBar.Text = "JJS Script v11"
+DragBar.Text = "JJS Script v12"
 DragBar.TextColor3 = THEME.Accent
 DragBar.Font = Enum.Font.GothamBold
 DragBar.TextSize = 11
@@ -373,7 +374,7 @@ local Footer = Instance.new("TextLabel")
 Footer.Size = UDim2.new(1, 0, 0, 12)
 Footer.Position = UDim2.new(0, 0, 1, -18)
 Footer.BackgroundTransparency = 1
-Footer.Text = "[RightShift] • AntiKick ON • v11"
+Footer.Text = "[RightShift] • AntiKick ON • v12"
 Footer.TextColor3 = Color3.fromRGB(120, 120, 130)
 Footer.Font = Enum.Font.Gotham
 Footer.TextSize = 9
@@ -603,7 +604,6 @@ local function positionBehindTarget()
     local myPos = myRoot.Position
     local targetPos = targetRoot.Position
 
-    -- Позиция сзади впритык
     local behindCF = targetRoot.CFrame * CFrame.new(0, 0, CONFIG.FOLLOW_DISTANCE)
     local behindPos = behindCF.Position
     local dist = (behindPos - myPos).Magnitude
@@ -654,32 +654,48 @@ task.spawn(function()
 end)
 
 --// ============================================
---// ⚔️ AUTOATTACK v11 — Multi-Method
+--// ⚔️ AUTOATTACK v12 — FIXED
 --// ============================================
 
--- Нажатие клавиши через VirtualInputManager
+-- Метод 1: mouse1click() — нативный метод Delta
+local function clickMouse()
+    pcall(function()
+        if mouse1click then
+            mouse1click()
+        elseif mouse1down and mouse1up then
+            mouse1down()
+            task.wait(0.02)
+            mouse1up()
+        end
+    end)
+end
+
+-- Метод 2: VirtualUser с CaptureController
+local function virtualClick()
+    pcall(function()
+        VirtualUser:CaptureController()
+        VirtualUser:ClickButton1(Vector2.new(Mouse.X, Mouse.Y))
+    end)
+end
+
+-- Метод 3: Нажатие клавиш через VirtualInputManager
 local function pressKey(keyCode)
     pcall(function()
-        local VirtualInputManager = game:GetService("VirtualInputManager")
         VirtualInputManager:SendKeyEvent(true, keyCode, false, game)
-        task.wait(0.03)
+        task.wait(0.02)
         VirtualInputManager:SendKeyEvent(false, keyCode, false, game)
     end)
 end
 
--- Активация всех инструментов
-local function activateAllTools()
+-- Метод 4: Активация Tool'ов
+local function activateTools()
     local myChar = LocalPlayer.Character
     if not myChar then return end
-    
-    -- Инструменты в руках
     for _, tool in ipairs(myChar:GetChildren()) do
         if tool:IsA("Tool") then
             pcall(function() tool:Activate() end)
         end
     end
-    
-    -- Инструменты в рюкзаке
     local backpack = LocalPlayer:FindFirstChild("Backpack")
     if backpack then
         for _, tool in ipairs(backpack:GetChildren()) do
@@ -692,45 +708,40 @@ local function activateAllTools()
     end
 end
 
--- Прямой вызов remote'ов атаки
-local function fireAttackRemotes(targetChar)
-    if not targetChar then return end
+-- Метод 5: Авто-скан и вызов attack remote'ов
+local function fireAllAttackRemotes()
+    local targetChar = CurrentTarget and CurrentTarget.Character
+    local keywords = {"attack", "hit", "m1", "combat", "damage", "swing", "punch", "melee"}
     
-    local remotePaths = {
-        {"ReplicatedStorage", "Remotes", "Attack"},
-        {"ReplicatedStorage", "Remotes", "Combat", "Attack"},
-        {"ReplicatedStorage", "Remotes", "Combat", "M1"},
-        {"ReplicatedStorage", "Remotes", "Skill"},
-        {"ReplicatedStorage", "Remotes", "UseSkill"},
-        {"ReplicatedStorage", "Remotes", "Hit"},
-        {"ReplicatedStorage", "RemoteEvents", "Attack"},
-        {"ReplicatedStorage", "Packages", "Combat", "Attack"},
-        {"ReplicatedStorage", "Events", "Attack"},
-        {"ReplicatedStorage", "Shared", "Attack"},
-    }
-    
-    for _, path in ipairs(remotePaths) do
-        local obj = game
-        local ok = true
-        for _, name in ipairs(path) do
-            if obj then
-                obj = obj:FindFirstChild(name)
-            else
-                ok = false
-                break
-            end
+    local function matches(name)
+        local lower = string.lower(name)
+        for _, kw in ipairs(keywords) do
+            if string.find(lower, kw) then return true end
         end
-        if ok and obj then
-            if obj:IsA("RemoteEvent") then
+        return false
+    end
+    
+    local function scanAndFire(container, depth)
+        if depth > 4 then return end
+        for _, obj in ipairs(container:GetChildren()) do
+            if obj:IsA("RemoteEvent") and matches(obj.Name) then
                 pcall(function() obj:FireServer() end)
-                pcall(function() obj:FireServer(targetChar) end)
-                pcall(function() obj:FireServer(targetChar, "M1") end)
-            elseif obj:IsA("RemoteFunction") then
+                if targetChar then
+                    pcall(function() obj:FireServer(targetChar) end)
+                    pcall(function() obj:FireServer(targetChar, "M1") end)
+                end
+            elseif obj:IsA("RemoteFunction") and matches(obj.Name) then
                 pcall(function() obj:InvokeServer() end)
-                pcall(function() obj:InvokeServer(targetChar) end)
+                if targetChar then
+                    pcall(function() obj:InvokeServer(targetChar) end)
+                end
+            elseif obj:IsA("Folder") or obj:IsA("Model") or obj:IsA("Actor") then
+                scanAndFire(obj, depth + 1)
             end
         end
     end
+    
+    pcall(function() scanAndFire(game:GetService("ReplicatedStorage"), 0) end)
 end
 
 -- Основная функция атаки
@@ -749,32 +760,39 @@ local function tryAttack()
     if not myRoot or not targetRoot then return end
 
     local dist = (myRoot.Position - targetRoot.Position).Magnitude
-    if dist > 12 then return end
+    if dist > 15 then return end
 
-    -- Метод 1: Клик M1
+    -- ✅ Разворот к цели (важно для M1)
     pcall(function()
-        VirtualUser:CaptureController()
-        VirtualUser:ClickButton1(Vector2.new(0, 0))
+        myRoot.CFrame = CFrame.new(myRoot.Position, Vector3.new(targetRoot.Position.X, myRoot.Position.Y, targetRoot.Position.Z))
     end)
+    task.wait(0.01)
 
-    -- Метод 2: Активация Tool'ов
-    activateAllTools()
+    -- 1) mouse1click
+    clickMouse()
 
-    -- Метод 3: Нажатие клавиш 1-4 (скиллы)
+    -- 2) VirtualUser
+    virtualClick()
+
+    -- 3) Tool Activate
+    activateTools()
+
+    -- 4) Keys 1-4
     pressKey(Enum.KeyCode.One)
     pressKey(Enum.KeyCode.Two)
     pressKey(Enum.KeyCode.Three)
     pressKey(Enum.KeyCode.Four)
 
-    -- Метод 4: Remote'ы
-    fireAttackRemotes(CurrentTarget.Character)
+    -- 5) Remote'ы
+    fireAllAttackRemotes()
 end
 
+-- Основной цикл AutoAttack
 task.spawn(function()
     while true do
         if AutoAttackEnabled and CurrentTarget then
             tryAttack()
-            task.wait(0.15)
+            task.wait(0.12)
         else
             task.wait(0.2)
         end
@@ -1141,5 +1159,5 @@ _G.JJS_CLEANUP = function()
     pcall(function() TargetHud:Destroy() end)
 end
 
-print("[JJS Script v11] Loaded for " .. LocalPlayer.Name)
-print("[JJS Script v11] Made by Xyqwerq | CFrame-step AutoFarm + Multi-method AutoAttack")
+print("[JJS Script v12] Loaded for " .. LocalPlayer.Name)
+print("[JJS Script v12] Made by Xyqwerq | mouse1click AutoAttack")
