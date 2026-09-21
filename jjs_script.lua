@@ -1,6 +1,6 @@
 --// ============================================
---// JJS Script v16 for Delta Executor
---// + SafeZone (Anti-Kick + Untouchable) | + Smart Target Lock
+--// JJS Script v17 for Delta Executor
+--// + Fast Movement (no slow-down) | + Smart Target Lock
 --// Made by Xyqwerq
 --// ============================================
 
@@ -49,7 +49,7 @@ local THEME = {
 
 local HOTKEY = Enum.KeyCode.RightShift
 local GUI_W = 260
-local GUI_H = 400
+local GUI_H = 340
 local MIN_WIDTH = 220
 local MIN_HEIGHT = 250
 
@@ -72,16 +72,17 @@ pcall(function()
     end
 end)
 
---// ============ CONFIGS ============
+--// ============ ✅ MOVEMENT CONFIG (fixed speed) ============
 local CONFIG = {
     FOLLOW_DISTANCE = 1.5,
-    STEP_INTERVAL   = 0.04,
-    STEP_SPEED      = 0.45,
-    MAX_STEP        = 2,
+    STEP_INTERVAL   = 0.03,       -- ✅ было 0.04 — чуть чаще
+    STEP_SPEED      = 0.65,       -- ✅ было 0.45 — больше за шаг
+    MAX_STEP        = 6,          -- ✅ было 2 — большой шаг при далёкой цели
+    MIN_STEP        = 2,          -- ✅ минимальный шаг (вблизи)
     DEADZONE        = 1,
     JUMP_ON_STUCK   = true,
-    REPATH_INTERVAL = 0.35,
-    WAYPOINT_REACH  = 4,
+    REPATH_INTERVAL = 0.3,
+    WAYPOINT_REACH  = 3,
 }
 
 -- ✅ TARGET LOCK
@@ -89,18 +90,6 @@ local TargetLockConfig = {
     EngageDistance = 20,
     DropDistance   = 40,
     SwitchMargin   = 8,
-}
-
--- ✅ SAFE ZONE CONFIG (работает без телепорта!)
-local SafeZoneConfig = {
-    Enabled = false,
-    MinHP   = 30,      -- при каком HP включается защита
-    MaxHP   = 90,      -- при каком HP выключается (если хочешь чтобы SafeZone "отдыхал")
-    Active  = false,   -- сейчас активна?
-    SavedParts = {},   -- сохранённые Transparency/CanCollide
-    FF = nil,
-    Connections = {},
-    HookInstalled = false,
 }
 
 -- SERVER HOP
@@ -124,9 +113,6 @@ local function saveConfig()
     local data = {
         AutoFarmEnabled     = AutoFarmEnabled,
         AutoAttackEnabled   = AutoAttackEnabled,
-        SafeZoneEnabled     = SafeZoneConfig.Enabled,
-        SafeZoneMinHP       = SafeZoneConfig.MinHP,
-        SafeZoneMaxHP       = SafeZoneConfig.MaxHP,
         ServerHopEnabled    = ServerHopConfig.Enabled,
         ServerHopMinPlayers = ServerHopConfig.MinPlayers,
     }
@@ -192,7 +178,7 @@ DragBar.Size = UDim2.new(1, -50, 0, 22)
 DragBar.BackgroundColor3 = THEME.BackgroundDark
 DragBar.BackgroundTransparency = 1
 DragBar.BorderSizePixel = 0
-DragBar.Text = "JJS Script v16"
+DragBar.Text = "JJS Script v17"
 DragBar.TextColor3 = THEME.Accent
 DragBar.Font = Enum.Font.GothamBold
 DragBar.TextSize = 11
@@ -287,7 +273,7 @@ ScrollFrame.BorderSizePixel = 0
 ScrollFrame.ScrollBarThickness = 4
 ScrollFrame.ScrollBarImageColor3 = THEME.Stroke
 ScrollFrame.ScrollBarImageTransparency = 0.2
-ScrollFrame.CanvasSize = UDim2.new(0, 0, 0, 620)
+ScrollFrame.CanvasSize = UDim2.new(0, 0, 0, 420)
 ScrollFrame.ScrollingDirection = Enum.ScrollingDirection.Y
 ScrollFrame.ElasticBehavior = Enum.ElasticBehavior.WhenScrollable
 ScrollFrame.Parent = MainFrame
@@ -413,33 +399,12 @@ ToggleStatus.Parent = ScrollFrame
 
 local Sep2 = makeSeparator(158)
 
---// ✅ SAFE ZONE SECTION (главная новая)
-local SafeZoneTitle = makeLabel("🛡️ SAFE ZONE (Untouchable)", 168, THEME.Green, 12)
-local SafeZoneBtn, SafeZoneStroke = makeButton("Enable Safe Zone", 186, 30)
-
-local SafeZoneStatus = Instance.new("TextLabel")
-SafeZoneStatus.Size = UDim2.new(1, -20, 0, 10)
-SafeZoneStatus.Position = UDim2.new(0, 10, 0, 220)
-SafeZoneStatus.BackgroundTransparency = 1
-SafeZoneStatus.Text = "Invisible • NoCollide • Heal • FF"
-SafeZoneStatus.TextColor3 = THEME.SubText
-SafeZoneStatus.Font = Enum.Font.Gotham
-SafeZoneStatus.TextSize = 8
-SafeZoneStatus.TextTransparency = 1
-SafeZoneStatus.TextXAlignment = Enum.TextXAlignment.Center
-SafeZoneStatus.Parent = ScrollFrame
-
-local MinHPLabel = makeLabel("Min HP (activate protection):", 238, THEME.SubText, 10)
-local MinHPInput, MinHPStroke = makeInput("30", 254, "30")
-
-local Sep3 = makeSeparator(288)
-
 --// TARGET SELECTOR
-local TargetTitle = makeLabel("Target Selector", 298)
+local TargetTitle = makeLabel("Target Selector", 168)
 
 local TargetDropdown = Instance.new("TextButton")
 TargetDropdown.Size = UDim2.new(1, -20, 0, 26)
-TargetDropdown.Position = UDim2.new(0, 10, 0, 316)
+TargetDropdown.Position = UDim2.new(0, 10, 0, 186)
 TargetDropdown.BackgroundColor3 = THEME.ButtonOff
 TargetDropdown.Text = "Auto (Nearest)"
 TargetDropdown.TextColor3 = THEME.Text
@@ -473,7 +438,7 @@ DDArrow.Parent = TargetDropdown
 
 local DropdownList = Instance.new("ScrollingFrame")
 DropdownList.Size = UDim2.new(1, -20, 0, 0)
-DropdownList.Position = UDim2.new(0, 10, 0, 346)
+DropdownList.Position = UDim2.new(0, 10, 0, 216)
 DropdownList.BackgroundColor3 = THEME.DropdownBg
 DropdownList.BackgroundTransparency = 1
 DropdownList.BorderSizePixel = 0
@@ -499,15 +464,15 @@ UIListLayout.Padding = UDim.new(0, 2)
 UIListLayout.SortOrder = Enum.SortOrder.LayoutOrder
 UIListLayout.Parent = DropdownList
 
-local Sep4 = makeSeparator(380)
+local Sep3 = makeSeparator(250)
 
 --// SERVER HOP
-local ServerHopTitle = makeLabel("Auto Server Hop", 390)
-local ServerHopBtn, ServerHopStroke = makeButton("Enable Auto Server Hop", 408, 28)
-local MinPlayersLabel = makeLabel("Hop when players count below:", 442, THEME.SubText, 10)
-local MinPlayersInput, MinPlayersStroke = makeInput("3", 458, "3")
+local ServerHopTitle = makeLabel("Auto Server Hop", 260)
+local ServerHopBtn, ServerHopStroke = makeButton("Enable Auto Server Hop", 278, 28)
+local MinPlayersLabel = makeLabel("Hop when players count below:", 312, THEME.SubText, 10)
+local MinPlayersInput, MinPlayersStroke = makeInput("3", 328, "3")
 
-local Sep5 = makeSeparator(492)
+local Sep4 = makeSeparator(362)
 
 --// FOOTER
 local CreditLabel = Instance.new("TextLabel")
@@ -526,7 +491,7 @@ local Footer = Instance.new("TextLabel")
 Footer.Size = UDim2.new(1, 0, 0, 12)
 Footer.Position = UDim2.new(0, 0, 1, -18)
 Footer.BackgroundTransparency = 1
-Footer.Text = "[RightShift] Hide • v16"
+Footer.Text = "[RightShift] Hide • v17"
 Footer.TextColor3 = Color3.fromRGB(120, 120, 130)
 Footer.Font = Enum.Font.Gotham
 Footer.TextSize = 9
@@ -578,7 +543,6 @@ end
 
 addStateHover(AutoFarmBtn, function() return AutoFarmEnabled end)
 addStateHover(AutoAttackBtn, function() return AutoAttackEnabled end)
-addStateHover(SafeZoneBtn, function() return SafeZoneConfig.Enabled end)
 addStateHover(ServerHopBtn, function() return ServerHopConfig.Enabled end)
 
 --// TARGET HUD
@@ -796,7 +760,8 @@ task.spawn(function()
             end
         else
             local nearest = getNearestPlayer()
-            if nearest and nearest ~= CurrentTarget then                local myChar = LocalPlayer.Character
+            if nearest and nearest ~= CurrentTarget then
+                local myChar = LocalPlayer.Character
                 local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
                 local nRoot = nearest.Character:FindFirstChild("HumanoidRootPart")
                 if myRoot and nRoot then
@@ -834,6 +799,7 @@ local function computePath(fromPos, toPos)
     return nil
 end
 
+-- ✅ FIXED: скорость НЕ зависит от дистанции
 local function positionBehindTarget()
     if not AutoFarmEnabled then return end
     if not CurrentTarget or not CurrentTarget.Character then return end
@@ -860,71 +826,98 @@ local function positionBehindTarget()
         return
     end
 
-    if dist > 25 then
-        local now = tick()
-        if now - lastRepathTime > CONFIG.REPATH_INTERVAL or not currentPath then
-            lastRepathTime = now
-            currentPath = computePath(myPos, behindPos)
-            currentWaypointIndex = 1
-        end
-
-        if currentPath then
-            local waypoints = currentPath:GetWaypoints()
-            if currentWaypointIndex <= #waypoints then
-                local wp = waypoints[currentWaypointIndex]
-                if wp then
-                    if wp.Action == Enum.PathWaypointAction.Jump then
-                        pcall(function() myHum.Jump = true end)
-                    end
-                    local wpPos = wp.Position
-                    if (wpPos - myPos).Magnitude < CONFIG.WAYPOINT_REACH then
-                        currentWaypointIndex = currentWaypointIndex + 1
-                    else
-                        local direction = (wpPos - myPos).Unit
-                        local stepSize = math.min((wpPos - myPos).Magnitude * CONFIG.STEP_SPEED, CONFIG.MAX_STEP)
-                        local newPos = myPos + direction * stepSize
-                        local newCF = CFrame.new(newPos, Vector3.new(targetPos.X, newPos.Y, targetPos.Z))
-                        myRoot.CFrame = myRoot.CFrame:Lerp(newCF, 0.7)
-                    end
+    -- ✅ Если путь уже есть — идём по waypoint'ам, не сбрасываем
+    if currentPath and dist > 15 then
+        local waypoints = currentPath:GetWaypoints()
+        if currentWaypointIndex <= #waypoints then
+            local wp = waypoints[currentWaypointIndex]
+            if wp then
+                if wp.Action == Enum.PathWaypointAction.Jump then
+                    pcall(function() myHum.Jump = true end)
                 end
-            else
-                currentPath = nil
+                local wpPos = wp.Position
+                local wpDist = (wpPos - myPos).Magnitude
+                
+                if wpDist < CONFIG.WAYPOINT_REACH then
+                    currentWaypointIndex = currentWaypointIndex + 1
+                else
+                    -- ✅ ФИКСИРОВАННЫЙ шаг — не зависит от дистанции
+                    local direction = (wpPos - myPos).Unit
+                    local stepSize = CONFIG.MAX_STEP  -- всегда макс
+                    local newPos = myPos + direction * stepSize
+                    local newCF = CFrame.new(newPos, Vector3.new(targetPos.X, newPos.Y, targetPos.Z))
+                    myRoot.CFrame = newCF
+                end
+                return
             end
-        else
-            local direction = (behindPos - myPos).Unit
-            local stepSize = math.min(dist * CONFIG.STEP_SPEED, CONFIG.MAX_STEP)
-            local newPos = myPos + direction * stepSize
-            local newCF = CFrame.new(newPos, Vector3.new(targetPos.X, newPos.Y, targetPos.Z))
-            myRoot.CFrame = myRoot.CFrame:Lerp(newCF, 0.7)
         end
-    else
+        currentPath = nil
+    end
+
+    -- ✅ Если цель рядом (< 15 studs) — прямое движение БЕЗ pathfinding
+    if dist <= 15 then
         local direction = (behindPos - myPos).Unit
-        local stepSize = math.min(dist * CONFIG.STEP_SPEED, CONFIG.MAX_STEP)
+        -- ✅ Не уменьшаем шаг по дистанции — фиксированный MAX_STEP
+        local stepSize = math.max(CONFIG.MIN_STEP, math.min(dist, CONFIG.MAX_STEP))
         local newPos = myPos + direction * stepSize
         local newCF = CFrame.new(newPos, Vector3.new(targetPos.X, newPos.Y, targetPos.Z))
         myRoot.CFrame = newCF
+        return
     end
 
-    if CONFIG.JUMP_ON_STUCK then
-        if lastPos and (myPos - lastPos).Magnitude < 0.3 then
-            stuckTimer = stuckTimer + CONFIG.STEP_INTERVAL
-            if stuckTimer > 0.5 then
+    -- ✅ Цель далеко — обновляем path (не чаще REPATH_INTERVAL)
+    local now = tick()
+    if now - lastRepathTime > CONFIG.REPATH_INTERVAL or not currentPath then
+        lastRepathTime = now
+        currentPath = computePath(myPos, behindPos)
+        currentWaypointIndex = 1
+    end
+
+    -- Если path построился — на след кадре пойдём по waypoint
+    if currentPath then
+        return
+    end
+
+    -- ✅ Fallback — прямое движение фиксированным шагом
+    local direction = (behindPos - myPos).Unit
+    local stepSize = CONFIG.MAX_STEP
+    local newPos = myPos + direction * stepSize
+    local newCF = CFrame.new(newPos, Vector3.new(targetPos.X, newPos.Y, targetPos.Z))
+    myRoot.CFrame = newCF
+end
+
+-- Anti-stuck
+task.spawn(function()
+    while true do
+        task.wait(0.5)
+        if not AutoFarmEnabled then continue end
+        local myChar = LocalPlayer.Character
+        if not myChar then continue end
+        local myRoot = myChar:FindFirstChild("HumanoidRootPart")
+        local myHum = myChar:FindFirstChildOfClass("Humanoid")
+        if not myRoot or not myHum then continue end
+        
+        if lastPos and (myRoot.Position - lastPos).Magnitude < 0.5 then
+            stuckTimer = stuckTimer + 0.5
+            if stuckTimer > 1 then
                 pcall(function() myHum.Jump = true end)
-                stuckTimer = 0
                 currentPath = nil
+                lastRepathTime = 0
+                stuckTimer = 0
             end
         else
             stuckTimer = 0
         end
-        lastPos = myPos
+        lastPos = myRoot.Position
     end
-end
+end)
 
 LocalPlayer.CharacterAdded:Connect(function()
     task.wait(1)
     stuckTimer = 0
     lastPos = nil
     currentPath = nil
+    lastRepathTime = 0
 end)
 
 task.spawn(function()
@@ -1054,182 +1047,6 @@ task.spawn(function()
     while true do
         updateHud()
         task.wait(0.15)
-    end
-end)
-
---// ============================================
---// 🛡️ SAFE ZONE — Anti-Kick + Untouchable
---// ============================================
--- ✅ Принцип: не меняем позицию, не используем BodyPosition
---    Просто:
---    1) Невидимость (Transparency = 1)
---    2) Отключение коллизий (CanCollide = false)
---    3) Auto-Heal (HP всегда макс)
---    4) ForceField (официальная неуязвимость)
---    5) Hook TakeDamage (блокирует урон)
-
-local function applySafeZone()
-    local char = LocalPlayer.Character
-    if not char then return end
-    local hum = char:FindFirstChildOfClass("Humanoid")
-    if not hum then return end
-
-    -- 1) Invisible + NoCollide
-    for _, part in ipairs(char:GetDescendants()) do
-        if part:IsA("BasePart") then
-            if SafeZoneConfig.SavedParts[part] == nil then
-                SafeZoneConfig.SavedParts[part] = {
-                    Transparency = part.Transparency,
-                    CanCollide = part.CanCollide,
-                    CanTouch = part.CanTouch,
-                    CanQuery = part.CanQuery,
-                }
-            end
-            part.Transparency = 1
-            part.CanCollide = false
-            part.CanTouch = false
-            part.CanQuery = false
-        elseif part:IsA("Decal") or part:IsA("Texture") then
-            if SafeZoneConfig.SavedParts[part] == nil then
-                SafeZoneConfig.SavedParts[part] = { Transparency = part.Transparency }
-            end
-            part.Transparency = 1
-        end
-    end
-
-    -- 2) ForceField (server-side invulnerability)
-    if not char:FindFirstChild("JJS_SafeZone_FF") then
-        local ff = Instance.new("ForceField")
-        ff.Name = "JJS_SafeZone_FF"
-        ff.Visible = false
-        ff.Parent = char
-        SafeZoneConfig.FF = ff
-    end
-
-    -- 3) Auto-Heal loop
-    local healConn = RunService.Heartbeat:Connect(function()
-        if not SafeZoneConfig.Enabled or not SafeZoneConfig.Active then return end
-        if hum and hum.Parent then
-            if hum.Health < hum.MaxHealth then
-                hum.Health = hum.MaxHealth
-            end
-        end
-    end)
-    table.insert(SafeZoneConfig.Connections, healConn)
-
-    -- 4) Hook TakeDamage
-    if not SafeZoneConfig.HookInstalled then
-        pcall(function()
-            local mt = getrawmetatable(game)
-            if mt then
-                SafeZoneConfig.HookInstalled = true
-                local oldNamecall = mt.__namecall
-                setreadonly(mt, false)
-                mt.__namecall = newcclosure(function(self, ...)
-                    local method = getnamecallmethod()
-                    if SafeZoneConfig.Enabled and SafeZoneConfig.Active then
-                        if method == "TakeDamage" then
-                            local ch = LocalPlayer.Character
-                            if ch then
-                                local h = ch:FindFirstChildOfClass("Humanoid")
-                                if self == h then return end
-                            end
-                        end
-                    end
-                    return oldNamecall(self, ...)
-                end)
-                setreadonly(mt, true)
-            end
-        end)
-    end
-
-    SafeZoneConfig.Active = true
-    print("[JJS SafeZone] 🛡️ Protection ACTIVE")
-end
-
-local function removeSafeZone()
-    local char = LocalPlayer.Character
-    if char then
-        -- Restore parts
-        for part, saved in pairs(SafeZoneConfig.SavedParts) do
-            if part and part.Parent then
-                pcall(function()
-                    part.Transparency = saved.Transparency
-                    if part:IsA("BasePart") then
-                        part.CanCollide = saved.CanCollide
-                        part.CanTouch = saved.CanTouch
-                        part.CanQuery = saved.CanQuery
-                    end
-                end)
-            end
-        end
-        -- Remove ForceField
-        pcall(function()
-            local ff = char:FindFirstChild("JJS_SafeZone_FF")
-            if ff then ff:Destroy() end
-        end)
-    end
-    SafeZoneConfig.SavedParts = {}
-    for _, conn in ipairs(SafeZoneConfig.Connections) do
-        pcall(function() conn:Disconnect() end)
-    end
-    SafeZoneConfig.Connections = {}
-    SafeZoneConfig.Active = false
-    print("[JJS SafeZone] Protection OFF")
-end
-
-LocalPlayer.CharacterAdded:Connect(function(char)
-    task.wait(1)
-    if SafeZoneConfig.Enabled then
-        SafeZoneConfig.SavedParts = {}
-        applySafeZone()
-    end
-end)
-
--- ✅ SafeZone main loop
-task.spawn(function()
-    while true do
-        task.wait(0.3)
-
-        -- Если фича выключена — убираем защиту
-        if not SafeZoneConfig.Enabled then
-            if SafeZoneConfig.Active then
-                removeSafeZone()
-            end
-            continue
-        end
-
-        local char = LocalPlayer.Character
-        if not char then continue end
-        local hum = char:FindFirstChildOfClass("Humanoid")
-        if not hum then continue end
-
-        -- Персонаж мёртв — ждём респавна
-        if hum.Health <= 0 then
-            if SafeZoneConfig.Active then
-                SafeZoneConfig.Active = false
-            end
-            continue
-        end
-
-        -- ✅ Активация защиты при падении HP ниже MinHP
-        if not SafeZoneConfig.Active and hum.Health <= SafeZoneConfig.MinHP then
-            applySafeZone()
-        end
-
-        -- ✅ Проверяем что части всё ещё невидимы (античит может сбросить)
-        if SafeZoneConfig.Active then
-            for _, part in ipairs(char:GetDescendants()) do
-                if part:IsA("BasePart") then
-                    if part.Transparency ~= 1 then
-                        part.Transparency = 1
-                    end
-                    if part.CanCollide then
-                        part.CanCollide = false
-                    end
-                end
-            end
-        end
     end
 end)
 
@@ -1535,26 +1352,6 @@ AutoAttackBtn.MouseButton1Click:Connect(function()
     pcall(saveConfig)
 end)
 
--- ✅ SAFE ZONE BUTTON
-SafeZoneBtn.MouseButton1Click:Connect(function()
-    SafeZoneConfig.Enabled = not SafeZoneConfig.Enabled
-    SafeZoneBtn.Text = SafeZoneConfig.Enabled and "Disable Safe Zone" or "Enable Safe Zone"
-    TweenService:Create(SafeZoneBtn, TweenInfo.new(0.25), {
-        BackgroundColor3 = SafeZoneConfig.Enabled and THEME.ButtonOn or THEME.ButtonOff
-    }):Play()
-    if not SafeZoneConfig.Enabled then
-        removeSafeZone()
-    end
-    pcall(saveConfig)
-end)
-
-MinHPInput.FocusLost:Connect(function()
-    local val = tonumber(MinHPInput.Text)
-    if val and val > 0 then SafeZoneConfig.MinHP = val
-    else MinHPInput.Text = tostring(SafeZoneConfig.MinHP) end
-    pcall(saveConfig)
-end)
-
 ServerHopBtn.MouseButton1Click:Connect(function()
     ServerHopConfig.Enabled = not ServerHopConfig.Enabled
     ServerHopBtn.Text = ServerHopConfig.Enabled and "Disable Auto Server Hop" or "Enable Auto Server Hop"
@@ -1661,7 +1458,6 @@ task.spawn(function()
     tween(Sep2, 0.8, {BackgroundTransparency = 0.3}):Play()
     tween(Sep3, 0.8, {BackgroundTransparency = 0.3}):Play()
     tween(Sep4, 0.8, {BackgroundTransparency = 0.3}):Play()
-    tween(Sep5, 0.8, {BackgroundTransparency = 0.3}):Play()
     task.wait(0.15)
 
     HelloLabel.Text = "Hello, " .. LocalPlayer.Name
@@ -1702,13 +1498,6 @@ task.spawn(function()
             AutoAttackBtn.Text = "Disable AutoAttack"
             AutoAttackBtn.BackgroundColor3 = THEME.ButtonOn
         end
-        if saved.SafeZoneEnabled then
-            SafeZoneConfig.Enabled = true
-            SafeZoneConfig.MinHP = saved.SafeZoneMinHP or 30
-            SafeZoneBtn.Text = "Disable Safe Zone"
-            SafeZoneBtn.BackgroundColor3 = THEME.ButtonOn
-            MinHPInput.Text = tostring(SafeZoneConfig.MinHP)
-        end
         if saved.ServerHopEnabled then
             ServerHopConfig.Enabled = true
             ServerHopConfig.MinPlayers = saved.ServerHopMinPlayers or 3
@@ -1726,7 +1515,7 @@ task.spawn(function()
         end
     end
 
-    StatusLabel.Text = "Loaded • v16"
+    StatusLabel.Text = "Loaded • v17"
     StatusLabel.TextColor3 = THEME.Green
 
     tween(AutoFarmBtn, 0.5, {TextTransparency = 0, BackgroundTransparency = 0}):Play()
@@ -1734,15 +1523,6 @@ task.spawn(function()
     tween(AutoAttackBtn, 0.5, {TextTransparency = 0, BackgroundTransparency = 0}):Play()
     tween(AutoAttackStroke, 0.5, {Transparency = 0.3}):Play()
     tween(ToggleStatus, 0.5, {TextTransparency = 0}):Play()
-
-    tween(SafeZoneTitle, 0.5, {TextTransparency = 0}):Play()
-    tween(SafeZoneBtn, 0.5, {TextTransparency = 0, BackgroundTransparency = 0}):Play()
-    tween(SafeZoneStroke, 0.5, {Transparency = 0.3}):Play()
-    tween(SafeZoneStatus, 0.5, {TextTransparency = 0}):Play()
-    tween(MinHPLabel, 0.5, {TextTransparency = 0}):Play()
-    tween(MinHPInput, 0.5, {TextTransparency = 0, BackgroundTransparency = 0}):Play()
-    tween(MinHPStroke, 0.5, {Transparency = 0.3}):Play()
-
     tween(TargetTitle, 0.5, {TextTransparency = 0}):Play()
     tween(TargetDropdown, 0.5, {TextTransparency = 0, BackgroundTransparency = 0}):Play()
     tween(DDStroke, 0.5, {Transparency = 0.3}):Play()
@@ -1765,10 +1545,9 @@ end)
 
 _G.JJS_CLEANUP = function()
     pcall(function() saveConfig() end)
-    pcall(function() removeSafeZone() end)
     pcall(function() ScreenGui:Destroy() end)
     pcall(function() TargetHud:Destroy() end)
 end
 
-print("[JJS Script v16] Loaded for " .. LocalPlayer.Name)
-print("[JJS Script v16] Made by Xyqwerq | SafeZone (Anti-Kick)")
+print("[JJS Script v17] Loaded for " .. LocalPlayer.Name)
+print("[JJS Script v17] Made by Xyqwerq | Fast Movement")
