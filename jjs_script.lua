@@ -1,6 +1,6 @@
 --// ============================================
---// JJS Script v17 for Delta Executor
---// + Fast Movement (no slow-down) | + Smart Target Lock
+--// JJS Script v18 for Delta Executor
+--// + Fast AutoAttack (No Mouse Move) | + Fast Movement
 --// Made by Xyqwerq
 --// ============================================
 
@@ -26,6 +26,7 @@ local TeleportService = game:GetService("TeleportService")
 local PathfindingService = game:GetService("PathfindingService")
 local LocalPlayer = Players.LocalPlayer
 local Mouse = LocalPlayer:GetMouse()
+local Camera = workspace.CurrentCamera
 
 --// ============ THEME ============
 local THEME = {
@@ -72,17 +73,25 @@ pcall(function()
     end
 end)
 
---// ============ ✅ MOVEMENT CONFIG (fixed speed) ============
+--// ============ MOVEMENT CONFIG ============
 local CONFIG = {
     FOLLOW_DISTANCE = 1.5,
-    STEP_INTERVAL   = 0.03,       -- ✅ было 0.04 — чуть чаще
-    STEP_SPEED      = 0.65,       -- ✅ было 0.45 — больше за шаг
-    MAX_STEP        = 6,          -- ✅ было 2 — большой шаг при далёкой цели
-    MIN_STEP        = 2,          -- ✅ минимальный шаг (вблизи)
+    STEP_INTERVAL   = 0.03,
+    MAX_STEP        = 6,
+    MIN_STEP        = 2,
     DEADZONE        = 1,
     JUMP_ON_STUCK   = true,
     REPATH_INTERVAL = 0.3,
     WAYPOINT_REACH  = 3,
+}
+
+-- ✅ ATTACK CONFIG
+local AttackConfig = {
+    SpamDelay = 0.05,       -- ✅ 20 кликов в секунду
+    UseRemote = true,       -- ✅ использовать remote'ы
+    UseClick = true,        -- ✅ использовать клики без перемещения мыши
+    UseKeys = true,         -- ✅ нажимать 1,2,3,4
+    UseTools = true,        -- ✅ активировать Tool'ы
 }
 
 -- ✅ TARGET LOCK
@@ -178,7 +187,7 @@ DragBar.Size = UDim2.new(1, -50, 0, 22)
 DragBar.BackgroundColor3 = THEME.BackgroundDark
 DragBar.BackgroundTransparency = 1
 DragBar.BorderSizePixel = 0
-DragBar.Text = "JJS Script v17"
+DragBar.Text = "JJS Script v18"
 DragBar.TextColor3 = THEME.Accent
 DragBar.Font = Enum.Font.GothamBold
 DragBar.TextSize = 11
@@ -189,7 +198,6 @@ local DragBarCorner = Instance.new("UICorner")
 DragBarCorner.CornerRadius = UDim.new(0, 10)
 DragBarCorner.Parent = DragBar
 
---// CLOSE
 local CloseBtn = Instance.new("TextButton")
 CloseBtn.Size = UDim2.new(0, 20, 0, 20)
 CloseBtn.Position = UDim2.new(1, -24, 0, 2)
@@ -214,7 +222,6 @@ CloseBtn.MouseLeave:Connect(function()
     TweenService:Create(CloseBtn, TweenInfo.new(0.15), {BackgroundColor3 = THEME.ButtonOff}):Play()
 end)
 
---// RESIZE
 local resizing = false
 local resizeStart, resizeStartSize
 
@@ -264,7 +271,6 @@ ResizeHandle.InputBegan:Connect(function(input)
     end
 end)
 
---// SCROLL FRAME
 local ScrollFrame = Instance.new("ScrollingFrame")
 ScrollFrame.Size = UDim2.new(1, 0, 1, -50)
 ScrollFrame.Position = UDim2.new(0, 0, 0, 26)
@@ -278,7 +284,6 @@ ScrollFrame.ScrollingDirection = Enum.ScrollingDirection.Y
 ScrollFrame.ElasticBehavior = Enum.ElasticBehavior.WhenScrollable
 ScrollFrame.Parent = MainFrame
 
---// HEADER
 local HelloLabel = Instance.new("TextLabel")
 HelloLabel.Size = UDim2.new(1, -20, 0, 26)
 HelloLabel.Position = UDim2.new(0, 10, 0, 2)
@@ -315,7 +320,6 @@ ScanLabel.TextTransparency = 1
 ScanLabel.TextXAlignment = Enum.TextXAlignment.Center
 ScanLabel.Parent = ScrollFrame
 
---// UI HELPERS
 local function makeSeparator(y)
     local sep = Instance.new("Frame")
     sep.Size = UDim2.new(1, -20, 0, 1)
@@ -380,7 +384,6 @@ local function makeInput(placeholder, y, default)
     return box, s
 end
 
---// MAIN BUTTONS
 local Sep1 = makeSeparator(64)
 local AutoFarmBtn, AutoFarmStroke = makeButton("Enable AutoFarm", 74, 28)
 local AutoAttackBtn, AutoAttackStroke = makeButton("Enable AutoAttack", 108, 28)
@@ -399,7 +402,6 @@ ToggleStatus.Parent = ScrollFrame
 
 local Sep2 = makeSeparator(158)
 
---// TARGET SELECTOR
 local TargetTitle = makeLabel("Target Selector", 168)
 
 local TargetDropdown = Instance.new("TextButton")
@@ -466,7 +468,6 @@ UIListLayout.Parent = DropdownList
 
 local Sep3 = makeSeparator(250)
 
---// SERVER HOP
 local ServerHopTitle = makeLabel("Auto Server Hop", 260)
 local ServerHopBtn, ServerHopStroke = makeButton("Enable Auto Server Hop", 278, 28)
 local MinPlayersLabel = makeLabel("Hop when players count below:", 312, THEME.SubText, 10)
@@ -474,7 +475,6 @@ local MinPlayersInput, MinPlayersStroke = makeInput("3", 328, "3")
 
 local Sep4 = makeSeparator(362)
 
---// FOOTER
 local CreditLabel = Instance.new("TextLabel")
 CreditLabel.Size = UDim2.new(1, 0, 0, 14)
 CreditLabel.Position = UDim2.new(0, 0, 1, -32)
@@ -491,7 +491,7 @@ local Footer = Instance.new("TextLabel")
 Footer.Size = UDim2.new(1, 0, 0, 12)
 Footer.Position = UDim2.new(0, 0, 1, -18)
 Footer.BackgroundTransparency = 1
-Footer.Text = "[RightShift] Hide • v17"
+Footer.Text = "[RightShift] Hide • v18"
 Footer.TextColor3 = Color3.fromRGB(120, 120, 130)
 Footer.Font = Enum.Font.Gotham
 Footer.TextSize = 9
@@ -499,7 +499,6 @@ Footer.TextTransparency = 1
 Footer.TextXAlignment = Enum.TextXAlignment.Center
 Footer.Parent = MainFrame
 
---// DOCK
 local DockBtn = Instance.new("TextButton")
 DockBtn.Size = UDim2.new(0, 42, 0, 42)
 DockBtn.Position = UDim2.new(0, 15, 0.5, -21)
@@ -525,7 +524,6 @@ DockStroke.Thickness = 1.5
 DockStroke.Transparency = 1
 DockStroke.Parent = DockBtn
 
---// HOVER
 local function addStateHover(btn, getState)
     btn.MouseEnter:Connect(function()
         local on = getState()
@@ -545,7 +543,6 @@ addStateHover(AutoFarmBtn, function() return AutoFarmEnabled end)
 addStateHover(AutoAttackBtn, function() return AutoAttackEnabled end)
 addStateHover(ServerHopBtn, function() return ServerHopConfig.Enabled end)
 
---// TARGET HUD
 local TargetHud = Instance.new("ScreenGui")
 TargetHud.Name = "JJSTargetHud"
 TargetHud.ResetOnSpawn = false
@@ -705,7 +702,6 @@ local function updateHud()
     HudAvatar.Image = "https://www.roblox.com/headshot-thumbnail/image?userId=" .. CurrentTarget.UserId .. "&width=150&height=150&format=png"
 end
 
---// SMART TARGET LOCK
 task.spawn(function()
     while true do
         task.wait(0.25)
@@ -799,7 +795,6 @@ local function computePath(fromPos, toPos)
     return nil
 end
 
--- ✅ FIXED: скорость НЕ зависит от дистанции
 local function positionBehindTarget()
     if not AutoFarmEnabled then return end
     if not CurrentTarget or not CurrentTarget.Character then return end
@@ -826,7 +821,6 @@ local function positionBehindTarget()
         return
     end
 
-    -- ✅ Если путь уже есть — идём по waypoint'ам, не сбрасываем
     if currentPath and dist > 15 then
         local waypoints = currentPath:GetWaypoints()
         if currentWaypointIndex <= #waypoints then
@@ -841,9 +835,8 @@ local function positionBehindTarget()
                 if wpDist < CONFIG.WAYPOINT_REACH then
                     currentWaypointIndex = currentWaypointIndex + 1
                 else
-                    -- ✅ ФИКСИРОВАННЫЙ шаг — не зависит от дистанции
                     local direction = (wpPos - myPos).Unit
-                    local stepSize = CONFIG.MAX_STEP  -- всегда макс
+                    local stepSize = CONFIG.MAX_STEP
                     local newPos = myPos + direction * stepSize
                     local newCF = CFrame.new(newPos, Vector3.new(targetPos.X, newPos.Y, targetPos.Z))
                     myRoot.CFrame = newCF
@@ -854,10 +847,8 @@ local function positionBehindTarget()
         currentPath = nil
     end
 
-    -- ✅ Если цель рядом (< 15 studs) — прямое движение БЕЗ pathfinding
     if dist <= 15 then
         local direction = (behindPos - myPos).Unit
-        -- ✅ Не уменьшаем шаг по дистанции — фиксированный MAX_STEP
         local stepSize = math.max(CONFIG.MIN_STEP, math.min(dist, CONFIG.MAX_STEP))
         local newPos = myPos + direction * stepSize
         local newCF = CFrame.new(newPos, Vector3.new(targetPos.X, newPos.Y, targetPos.Z))
@@ -865,7 +856,6 @@ local function positionBehindTarget()
         return
     end
 
-    -- ✅ Цель далеко — обновляем path (не чаще REPATH_INTERVAL)
     local now = tick()
     if now - lastRepathTime > CONFIG.REPATH_INTERVAL or not currentPath then
         lastRepathTime = now
@@ -873,12 +863,10 @@ local function positionBehindTarget()
         currentWaypointIndex = 1
     end
 
-    -- Если path построился — на след кадре пойдём по waypoint
     if currentPath then
         return
     end
 
-    -- ✅ Fallback — прямое движение фиксированным шагом
     local direction = (behindPos - myPos).Unit
     local stepSize = CONFIG.MAX_STEP
     local newPos = myPos + direction * stepSize
@@ -886,7 +874,6 @@ local function positionBehindTarget()
     myRoot.CFrame = newCF
 end
 
--- Anti-stuck
 task.spawn(function()
     while true do
         task.wait(0.5)
@@ -934,34 +921,35 @@ task.spawn(function()
     end
 end)
 
---// AUTOATTACK
-local function clickMouse()
+--// ============================================
+--// ⚔️ AUTOATTACK v18 — FAST + NO MOUSE MOVE
+--// ============================================
+local VirtualInputManager = game:GetService("VirtualInputManager")
+
+-- ✅ Клик через VirtualInputManager (НЕ двигает курсор!)
+local function spamClick()
     pcall(function()
-        if typeof(mouse1click) == "function" then
-            mouse1click()
-        elseif typeof(mouse1down) == "function" and typeof(mouse1up) == "function" then
-            mouse1down()
-            task.wait(0.02)
-            mouse1up()
-        end
+        -- Отправляем клик на текущую позицию мыши БЕЗ её перемещения
+        local vpSize = Camera.ViewportSize
+        VirtualInputManager:SendMouseButtonEvent(
+            vpSize.X / 2, vpSize.Y / 2,  -- координаты (центр экрана)
+            0,                            -- mouse wheel
+            true,                         -- mouse down
+            game,                         -- sender
+            0                             -- mouse button (0 = left)
+        )
+        task.wait(0.01)
+        VirtualInputManager:SendMouseButtonEvent(
+            vpSize.X / 2, vpSize.Y / 2,
+            0,
+            false,                        -- mouse up
+            game,
+            0
+        )
     end)
 end
 
-local function virtualClick()
-    pcall(function()
-        VirtualUser:CaptureController()
-        VirtualUser:ClickButton1(Vector2.new(Mouse.X, Mouse.Y))
-    end)
-end
-
-local function pressKey(keyCode)
-    pcall(function()
-        VirtualInputManager:SendKeyEvent(true, keyCode, false, game)
-        task.wait(0.02)
-        VirtualInputManager:SendKeyEvent(false, keyCode, false, game)
-    end)
-end
-
+-- ✅ Активация Tool'ов
 local function activateTools()
     local myChar = LocalPlayer.Character
     if not myChar then return end
@@ -972,9 +960,21 @@ local function activateTools()
     end
 end
 
-local function fireAllAttackRemotes()
-    local targetChar = CurrentTarget and CurrentTarget.Character
-    local keywords = {"attack", "hit", "m1", "combat", "damage", "swing", "punch", "melee"}
+-- ✅ Нажатие клавиш 1-4
+local function pressKey(keyCode)
+    pcall(function()
+        VirtualInputManager:SendKeyEvent(true, keyCode, false, game)
+        task.wait(0.01)
+        VirtualInputManager:SendKeyEvent(false, keyCode, false, game)
+    end)
+end
+
+-- ✅ Вызов remote'ов атаки
+local cachedAttackRemotes = nil
+local function getAttackRemotes()
+    if cachedAttackRemotes then return cachedAttackRemotes end
+    local remotes = {}
+    local keywords = {"attack", "hit", "m1", "combat", "damage", "swing", "punch", "melee", "lightattack", "light"}
     local function matches(name)
         local lower = string.lower(name)
         for _, kw in ipairs(keywords) do
@@ -982,24 +982,43 @@ local function fireAllAttackRemotes()
         end
         return false
     end
-    local function scanAndFire(container, depth)
-        if depth > 4 then return end
+    local function scan(container, depth)
+        if depth > 5 then return end
         for _, obj in ipairs(container:GetChildren()) do
-            if obj:IsA("RemoteEvent") and matches(obj.Name) then
-                pcall(function() obj:FireServer() end)
-                if targetChar then
-                    pcall(function() obj:FireServer(targetChar) end)
-                end
-            elseif obj:IsA("RemoteFunction") and matches(obj.Name) then
-                pcall(function() obj:InvokeServer() end)
+            if (obj:IsA("RemoteEvent") or obj:IsA("RemoteFunction")) and matches(obj.Name) then
+                table.insert(remotes, obj)
             elseif obj:IsA("Folder") or obj:IsA("Model") then
-                scanAndFire(obj, depth + 1)
+                scan(obj, depth + 1)
             end
         end
     end
-    pcall(function() scanAndFire(game:GetService("ReplicatedStorage"), 0) end)
+    pcall(function() scan(game:GetService("ReplicatedStorage"), 0) end)
+    cachedAttackRemotes = remotes
+    return remotes
 end
 
+local function fireAttackRemotes()
+    local targetChar = CurrentTarget and CurrentTarget.Character
+    local remotes = getAttackRemotes()
+    for _, obj in ipairs(remotes) do
+        pcall(function()
+            if obj:IsA("RemoteEvent") then
+                obj:FireServer()
+                if targetChar then
+                    obj:FireServer(targetChar)
+                    obj:FireServer(targetChar, "M1")
+                end
+            else
+                obj:InvokeServer()
+                if targetChar then
+                    obj:InvokeServer(targetChar)
+                end
+            end
+        end)
+    end
+end
+
+-- ✅ Основная функция атаки — вызывается в цикле
 local function tryAttack()
     if not CurrentTarget or not CurrentTarget.Character then return end
     local myChar = LocalPlayer.Character
@@ -1017,28 +1036,38 @@ local function tryAttack()
     local dist = (myRoot.Position - targetRoot.Position).Magnitude
     if dist > 15 then return end
 
+    -- Поворот к цели (без смены позиции)
     pcall(function()
         myRoot.CFrame = CFrame.new(myRoot.Position, Vector3.new(targetRoot.Position.X, myRoot.Position.Y, targetRoot.Position.Z))
     end)
-    task.wait(0.01)
+    task.wait(0.005)
 
-    clickMouse()
-    virtualClick()
-    activateTools()
-    pressKey(Enum.KeyCode.One)
-    pressKey(Enum.KeyCode.Two)
-    pressKey(Enum.KeyCode.Three)
-    pressKey(Enum.KeyCode.Four)
-    fireAllAttackRemotes()
+    -- ✅ Спамим всеми способами одновременно
+    if AttackConfig.UseClick then
+        spamClick()
+    end
+    if AttackConfig.UseTools then
+        activateTools()
+    end
+    if AttackConfig.UseRemote then
+        fireAttackRemotes()
+    end
+    if AttackConfig.UseKeys then
+        pressKey(Enum.KeyCode.One)
+        pressKey(Enum.KeyCode.Two)
+        pressKey(Enum.KeyCode.Three)
+        pressKey(Enum.KeyCode.Four)
+    end
 end
 
+-- ✅ Быстрый цикл атаки (20 раз/сек)
 task.spawn(function()
     while true do
         if AutoAttackEnabled and CurrentTarget then
             tryAttack()
-            task.wait(0.12)
+            task.wait(AttackConfig.SpamDelay)
         else
-            task.wait(0.2)
+            task.wait(0.1)
         end
     end
 end)
@@ -1232,7 +1261,6 @@ end
 
 CloseBtn.MouseButton1Click:Connect(hideGui)
 
---// DRAGGING
 local dragging, dragInput, dragStart, startPos
 local dockDragging, dockDragInput, dockDragStart, dockStartPos, dockMoved
 local hudDragging, hudDragInput, hudDragStart, hudStartPos
@@ -1323,7 +1351,6 @@ UserInputService.InputBegan:Connect(function(input, processed)
     end
 end)
 
---// BUTTON LOGIC
 local function refreshStatus()
     ToggleStatus.Text = "AutoFarm: " .. (AutoFarmEnabled and "ON" or "OFF") ..
                         " | AutoAttack: " .. (AutoAttackEnabled and "ON" or "OFF")
@@ -1375,7 +1402,6 @@ DockBtn.MouseLeave:Connect(function()
     TweenService:Create(DockBtn, TweenInfo.new(0.2), {BackgroundColor3 = THEME.Background}):Play()
 end)
 
---// DROPDOWN
 local DropdownOpen = false
 
 local function rebuildDropdown()
@@ -1445,7 +1471,6 @@ TargetDropdown.MouseButton1Click:Connect(function()
     end
 end)
 
---// ANIMATION
 local function tween(obj, time, props)
     return TweenService:Create(obj, TweenInfo.new(time, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), props)
 end
@@ -1515,7 +1540,7 @@ task.spawn(function()
         end
     end
 
-    StatusLabel.Text = "Loaded • v17"
+    StatusLabel.Text = "Loaded • v18"
     StatusLabel.TextColor3 = THEME.Green
 
     tween(AutoFarmBtn, 0.5, {TextTransparency = 0, BackgroundTransparency = 0}):Play()
@@ -1549,5 +1574,5 @@ _G.JJS_CLEANUP = function()
     pcall(function() TargetHud:Destroy() end)
 end
 
-print("[JJS Script v17] Loaded for " .. LocalPlayer.Name)
-print("[JJS Script v17] Made by Xyqwerq | Fast Movement")
+print("[JJS Script v18] Loaded for " .. LocalPlayer.Name)
+print("[JJS Script v18] Made by Xyqwerq | Fast AutoAttack (No Mouse Move)")
