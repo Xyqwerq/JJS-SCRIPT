@@ -1,7 +1,14 @@
 --// ============================================
---// JJS Script v4 for Delta Executor
---// + Hotkey (RightShift) | + Resizable GUI | + Draggable Dock
+--// JJS Script v5 for Delta Executor
+--// + AntiKick | + Anti-Duplicate | + Fixed AutoFarm (Velocity)
 --// ============================================
+
+--// ============ ЗАЩИТА ОТ ПОВТОРНОГО ЗАПУСКА ============
+if _G.JJS_SCRIPT_LOADED then
+    warn("[JJS Script] Уже запущен! Удаляю старый экземпляр...")
+    if _G.JJS_CLEANUP then pcall(_G.JJS_CLEANUP) end
+end
+_G.JJS_SCRIPT_LOADED = true
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -23,9 +30,11 @@ local THEME = {
     Red          = Color3.fromRGB(255, 90, 90),
 }
 
-local HOTKEY = Enum.KeyCode.RightShift  -- Горячая клавиша скрытия/показа
+local HOTKEY = Enum.KeyCode.RightShift
 local MIN_WIDTH = 300
 local MIN_HEIGHT = 380
+local FOLLOW_DISTANCE = 5      -- насколько близко держаться сзади
+local FOLLOW_SMOOTHNESS = 0.15 -- чем меньше — тем плавнее (античит-френдли)
 
 --// ============ УДАЛЯЕМ СТАРЫЕ GUI ============
 for _, name in ipairs({"JJSScriptGui", "JJSTargetHud"}) do
@@ -44,7 +53,6 @@ ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 ScreenGui.Parent = game.CoreGui
 
 local MainFrame = Instance.new("Frame")
-MainFrame.Name = "MainFrame"
 MainFrame.Size = UDim2.new(0, 340, 0, 420)
 MainFrame.Position = UDim2.new(0.5, -170, 0.5, -210)
 MainFrame.BackgroundColor3 = THEME.Background
@@ -69,21 +77,19 @@ InnerStroke.Thickness = 1
 InnerStroke.Transparency = 1
 InnerStroke.Parent = MainFrame
 
---// Заголовок
 local DragBar = Instance.new("TextLabel")
 DragBar.Size = UDim2.new(1, -70, 0, 28)
-DragBar.Position = UDim2.new(0, 0, 0, 0)
 DragBar.BackgroundColor3 = Color3.fromRGB(28, 28, 33)
 DragBar.BackgroundTransparency = 1
 DragBar.BorderSizePixel = 0
-DragBar.Text = "JJS Script v4"
+DragBar.Text = "JJS Script v5"
 DragBar.TextColor3 = THEME.Accent
 DragBar.Font = Enum.Font.GothamBold
 DragBar.TextSize = 13
 DragBar.TextTransparency = 1
 DragBar.Parent = MainFrame
 
---// ============ КРЕСТИК ============
+--// КРЕСТИК
 local CloseBtn = Instance.new("TextButton")
 CloseBtn.Size = UDim2.new(0, 24, 0, 24)
 CloseBtn.Position = UDim2.new(1, -32, 0, 4)
@@ -108,7 +114,10 @@ CloseBtn.MouseLeave:Connect(function()
     TweenService:Create(CloseBtn, TweenInfo.new(0.15), {BackgroundColor3 = Color3.fromRGB(55, 55, 65)}):Play()
 end)
 
---// ============ РЕСАЙЗ (правый нижний угол) ============
+--// РЕСАЙЗ
+local resizing = false
+local resizeStart, resizeStartSize
+
 local ResizeHandle = Instance.new("TextButton")
 ResizeHandle.Size = UDim2.new(0, 16, 0, 16)
 ResizeHandle.Position = UDim2.new(1, -18, 1, -18)
@@ -122,7 +131,6 @@ local ResizeCorner = Instance.new("UICorner")
 ResizeCorner.CornerRadius = UDim.new(0, 4)
 ResizeCorner.Parent = ResizeHandle
 
--- Иконка ресайза (диагональные линии)
 local ResizeIcon = Instance.new("TextLabel")
 ResizeIcon.Size = UDim2.new(1, 0, 1, 0)
 ResizeIcon.BackgroundTransparency = 1
@@ -142,9 +150,6 @@ ResizeHandle.MouseLeave:Connect(function()
     end
 end)
 
-local resizing = false
-local resizeStart, resizeStartSize
-
 ResizeHandle.InputBegan:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
         resizing = true
@@ -159,7 +164,7 @@ ResizeHandle.InputBegan:Connect(function(input)
     end
 end)
 
---// ============ ГЛАВНЫЙ ТЕКСТ ============
+--// ТЕКСТ
 local HelloLabel = Instance.new("TextLabel")
 HelloLabel.Size = UDim2.new(1, -40, 0, 36)
 HelloLabel.Position = UDim2.new(0, 20, 0, 45)
@@ -208,7 +213,7 @@ local function makeSeparator(y)
 end
 local Sep1 = makeSeparator(122)
 
---// ============ КНОПКИ ============
+--// КНОПКИ
 local AutoFarmBtn = Instance.new("TextButton")
 AutoFarmBtn.Size = UDim2.new(1, -40, 0, 36)
 AutoFarmBtn.Position = UDim2.new(0, 20, 0, 135)
@@ -269,7 +274,7 @@ ToggleStatus.Parent = MainFrame
 
 local Sep2 = makeSeparator(240)
 
---// ============ TARGET SELECTOR ============
+--// TARGET SELECTOR
 local TargetTitle = Instance.new("TextLabel")
 TargetTitle.Size = UDim2.new(1, -40, 0, 16)
 TargetTitle.Position = UDim2.new(0, 20, 0, 250)
@@ -344,12 +349,11 @@ UIListLayout.Padding = UDim.new(0, 2)
 UIListLayout.SortOrder = Enum.SortOrder.LayoutOrder
 UIListLayout.Parent = DropdownList
 
---// ============ ФУТЕР ============
 local Footer = Instance.new("TextLabel")
 Footer.Size = UDim2.new(1, 0, 0, 16)
 Footer.Position = UDim2.new(0, 0, 1, -22)
 Footer.BackgroundTransparency = 1
-Footer.Text = "[RightShift] Скрыть/Показать • v4"
+Footer.Text = "[RightShift] Скрыть • AntiKick ON • v5"
 Footer.TextColor3 = Color3.fromRGB(120, 120, 130)
 Footer.Font = Enum.Font.Gotham
 Footer.TextSize = 11
@@ -488,24 +492,6 @@ local function getAlivePlayers()
     return list
 end
 
-local function getNearestPlayer()
-    local myChar = LocalPlayer.Character
-    if not myChar or not myChar:FindFirstChild("HumanoidRootPart") then return nil end
-    local myPos = myChar.HumanoidRootPart.Position
-    local nearest, minDist = nil, math.huge
-    for _, p in ipairs(getAlivePlayers()) do
-        local hrp = p.Character:FindFirstChild("HumanoidRootPart")
-        if hrp then
-            local dist = (hrp.Position - myPos).Magnitude
-            if dist < minDist then
-                minDist = dist
-                nearest = p
-            end
-        end
-    end
-    return nearest
-end
-
 local function switchTarget()
     if ManualTarget and ManualTarget.Character then
         local hum = ManualTarget.Character:FindFirstChildOfClass("Humanoid")
@@ -572,17 +558,142 @@ task.spawn(function()
     end
 end)
 
-local function positionBehindTarget()
-    if not AutoFarmEnabled then return end
-    if not CurrentTarget or not CurrentTarget.Character then return end
-    local myChar = LocalPlayer.Character
-    local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
-    local targetRoot = CurrentTarget.Character:FindFirstChild("HumanoidRootPart")
-    if not myRoot or not targetRoot then return end
-    local behindPos = targetRoot.CFrame * CFrame.new(0, 0, 3)
-    myRoot.CFrame = myRoot.CFrame:Lerp(behindPos, 0.35)
+--// ============================================
+--// 🛡️ ФИКС AUTOFARM — ЧЕРЕЗ VELOCITY (античит-френдли)
+--// ============================================
+-- Вместо жёсткого CFrame мы используем:
+-- 1) BodyVelocity / LinearVelocity — двигаем физически
+-- 2) Плавное приближение через Lerp по маленьким шагам
+-- 3) Не трогаем CFrame HumanoidRootPart напрямую
+
+local followAttachment = nil
+local followVelocity = nil
+
+local function cleanupVelocity()
+    if followVelocity then
+        pcall(function() followVelocity:Destroy() end)
+        followVelocity = nil
+    end
+    if followAttachment then
+        pcall(function() followAttachment:Destroy() end)
+        followAttachment = nil
+    end
 end
 
+local function setupVelocity()
+    cleanupVelocity()
+    local myChar = LocalPlayer.Character
+    if not myChar then return end
+    local myRoot = myChar:FindFirstChild("HumanoidRootPart")
+    if not myRoot then return end
+    
+    -- Используем LinearVelocity (современный) или BodyVelocity (старый)
+    local ok = pcall(function()
+        followAttachment = Instance.new("Attachment")
+        followAttachment.Parent = myRoot
+        
+        followVelocity = Instance.new("LinearVelocity")
+        followVelocity.Attachment0 = followAttachment
+        followVelocity.MaxForce = math.huge
+        followVelocity.VectorVelocity = Vector3.zero
+        followVelocity.RelativeTo = Enum.ActuatorRelativeTo.World
+        followVelocity.Parent = myRoot
+    end)
+    
+    if not ok then
+        -- Фолбэк на BodyVelocity
+        followVelocity = Instance.new("BodyVelocity")
+        followVelocity.MaxForce = Vector3.new(math.huge, math.huge, math.huge)
+        followVelocity.Velocity = Vector3.zero
+        followVelocity.Parent = myRoot
+    end
+end
+
+-- Плавное движение через velocity с учётом дистанции
+local function positionBehindTarget()
+    if not AutoFarmEnabled then 
+        cleanupVelocity()
+        return 
+    end
+    if not CurrentTarget or not CurrentTarget.Character then 
+        cleanupVelocity()
+        return 
+    end
+    
+    local myChar = LocalPlayer.Character
+    if not myChar then return end
+    local myRoot = myChar:FindFirstChild("HumanoidRootPart")
+    local myHum = myChar:FindFirstChildOfClass("Humanoid")
+    if not myRoot or not myHum then return end
+    
+    local targetRoot = CurrentTarget.Character:FindFirstChild("HumanoidRootPart")
+    if not targetRoot then 
+        cleanupVelocity()
+        return 
+    end
+    
+    -- Проверяем что мы не в стане / ragdoll
+    local state = myHum:GetState()
+    if state == Enum.HumanoidStateType.Dead or state == Enum.HumanoidStateType.FallingDown then
+        return
+    end
+    
+    -- Создаём velocity если нет
+    if not followVelocity then setupVelocity() end
+    if not followVelocity then return end
+    
+    -- Целевая позиция — сзади цели
+    local behindPos = targetRoot.CFrame * CFrame.new(0, 0, FOLLOW_DISTANCE)
+    local targetPos = behindPos.Position
+    local currentPos = myRoot.Position
+    local distance = (targetPos - currentPos).Magnitude
+    
+    -- Мёртвая зона — не двигаемся если уже близко (античит френдли)
+    if distance < 2 then
+        if followVelocity:IsA("LinearVelocity") then
+            followVelocity.VectorVelocity = Vector3.zero
+        else
+            followVelocity.Velocity = Vector3.zero
+        end
+        return
+    end
+    
+    -- Плавная скорость пропорционально дистанции
+    -- Чем дальше — тем быстрее, но ограничиваем макс. скорость (античит!)
+    local speed = math.clamp(distance * 1.5, 5, 40)  -- макс 40 studs/s
+    local direction = (targetPos - currentPos).Unit
+    local velocity = direction * speed
+    
+    if followVelocity:IsA("LinearVelocity") then
+        -- Плавное изменение (не прыжок скорости)
+        followVelocity.VectorVelocity = followVelocity.VectorVelocity:Lerp(velocity, FOLLOW_SMOOTHNESS)
+    else
+        followVelocity.Velocity = followVelocity.Velocity:Lerp(velocity, FOLLOW_SMOOTHNESS)
+    end
+end
+
+-- Пересоздаём velocity при респавне
+LocalPlayer.CharacterAdded:Connect(function()
+    task.wait(1)
+    if AutoFarmEnabled then
+        setupVelocity()
+    end
+end)
+
+-- Цикл AutoFarm
+task.spawn(function()
+    while true do
+        if AutoFarmEnabled then
+            positionBehindTarget()
+            task.wait(0.03) -- 30 FPS для плавности
+        else
+            cleanupVelocity()
+            task.wait(0.2)
+        end
+    end
+end)
+
+--// AUTOATTACK
 local VirtualUser = game:GetService("VirtualUser")
 
 local function tryAttack()
@@ -591,10 +702,20 @@ local function tryAttack()
     if not myChar then return end
     local targetHum = CurrentTarget.Character:FindFirstChildOfClass("Humanoid")
     if not targetHum or targetHum.Health <= 0 then return end
+    
+    -- Проверяем что цель в радиусе
+    local myRoot = myChar:FindFirstChild("HumanoidRootPart")
+    local targetRoot = CurrentTarget.Character:FindFirstChild("HumanoidRootPart")
+    if not myRoot or not targetRoot then return end
+    if (myRoot.Position - targetRoot.Position).Magnitude > 20 then return end
+    
+    -- 1) Активируем Tool
     local tool = myChar:FindFirstChildOfClass("Tool")
     if tool then
         pcall(function() tool:Activate() end)
     end
+    
+    -- 2) Симулируем клик мышью
     pcall(function()
         VirtualUser:CaptureController()
         VirtualUser:ClickButton1(Vector2.new(0, 0))
@@ -604,28 +725,8 @@ end
 task.spawn(function()
     while true do
         if AutoAttackEnabled then
-            if CurrentTarget and CurrentTarget.Character then
-                local hum = CurrentTarget.Character:FindFirstChildOfClass("Humanoid")
-                local hrp = CurrentTarget.Character:FindFirstChild("HumanoidRootPart")
-                local myChar = LocalPlayer.Character
-                local myHrp = myChar and myChar:FindFirstChild("HumanoidRootPart")
-                if hum and hum.Health > 0 and hrp and myHrp then
-                    local dist = (hrp.Position - myHrp.Position).Magnitude
-                    if dist <= 15 then tryAttack() end
-                end
-            end
-            task.wait(0.12)
-        else
-            task.wait(0.2)
-        end
-    end
-end)
-
-task.spawn(function()
-    while true do
-        if AutoFarmEnabled then
-            positionBehindTarget()
-            task.wait(0.05)
+            tryAttack()
+            task.wait(0.1)
         else
             task.wait(0.2)
         end
@@ -640,6 +741,69 @@ task.spawn(function()
 end)
 
 --// ============================================
+--// 🛡️ ANTIKICK / ANTI-AFK
+--// ============================================
+local antiKickEnabled = true
+
+-- 1) Виртуальный пользователь (сбрасывает AFK-таймер Roblox)
+LocalPlayer.Idled:Connect(function()
+    if not antiKickEnabled then return end
+    pcall(function()
+        VirtualUser:CaptureController()
+        VirtualUser:ClickButton2(Vector2.new(0, 0))
+    end)
+end)
+
+-- 2) Движение каждые 60 сек (античит некоторых игр)
+task.spawn(function()
+    while antiKickEnabled do
+        task.wait(60)
+        pcall(function()
+            VirtualUser:CaptureController()
+            VirtualUser:ClickButton2(Vector2.new(0, 0))
+        end)
+    end
+end)
+
+-- 3) Защита от кика через Players:Chat / Kicked
+-- (перехватываем вызов Kick на LocalPlayer)
+local mt = getrawmetatable and getrawmetatable(game)
+if mt then
+    local oldNamecall = mt.__namecall
+    setreadonly(mt, false)
+    mt.__namecall = newcclosure(function(self, ...)
+        local method = getnamecallmethod()
+        if antiKickEnabled and method == "Kick" and self == LocalPlayer then
+            warn("[JJS AntiKick] Попытка кика заблокирована!")
+            return
+        end
+        return oldNamecall(self, ...)
+    end)
+    setreadonly(mt, true)
+end
+
+-- 4) Anti-Fling / Anti-Teleport защита (для себя)
+task.spawn(function()
+    while antiKickEnabled do
+        task.wait(1)
+        local char = LocalPlayer.Character
+        if char then
+            local hrp = char:FindFirstChild("HumanoidRootPart")
+            if hrp then
+                -- Убираем подозрительные velocity, созданные читерами
+                for _, v in ipairs(hrp:GetChildren()) do
+                    if v:IsA("BodyVelocity") or v:IsA("BodyAngularVelocity") then
+                        if v ~= followVelocity then
+                            pcall(function() v:Destroy() end)
+                        end
+                    end
+                end
+            end
+        end
+    end
+end)
+
+--// ============================================
 --// СКРЫТИЕ / ПОКАЗ GUI
 --// ============================================
 local GuiHidden = false
@@ -647,9 +811,7 @@ local GuiHidden = false
 local function hideGui()
     if GuiHidden then return end
     GuiHidden = true
-    
     HudFrame.Visible = false
-    
     TweenService:Create(MainFrame, TweenInfo.new(0.3, Enum.EasingStyle.Quart, Enum.EasingDirection.In), {
         Size = UDim2.new(0, 0, 0, 0),
         Position = UDim2.new(0.5, 0, 0.5, 0),
@@ -657,14 +819,11 @@ local function hideGui()
     }):Play()
     TweenService:Create(MainStroke, TweenInfo.new(0.3), {Transparency = 1}):Play()
     TweenService:Create(InnerStroke, TweenInfo.new(0.3), {Transparency = 1}):Play()
-    
     task.wait(0.3)
     MainFrame.Visible = false
-    
     DockBtn.Visible = true
     TweenService:Create(DockBtn, TweenInfo.new(0.4, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
-        BackgroundTransparency = 0,
-        TextTransparency = 0
+        BackgroundTransparency = 0, TextTransparency = 0
     }):Play()
     TweenService:Create(DockStroke, TweenInfo.new(0.4), {Transparency = 0.2}):Play()
 end
@@ -672,20 +831,15 @@ end
 local function showGui()
     if not GuiHidden then return end
     GuiHidden = false
-    
     TweenService:Create(DockBtn, TweenInfo.new(0.25), {
-        BackgroundTransparency = 1,
-        TextTransparency = 1
+        BackgroundTransparency = 1, TextTransparency = 1
     }):Play()
     TweenService:Create(DockStroke, TweenInfo.new(0.25), {Transparency = 1}):Play()
-    
     task.wait(0.25)
     DockBtn.Visible = false
-    
     MainFrame.Visible = true
     MainFrame.Size = UDim2.new(0, 0, 0, 0)
     MainFrame.Position = UDim2.new(0.5, 0, 0.5, 0)
-    
     TweenService:Create(MainFrame, TweenInfo.new(0.4, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
         Size = UDim2.new(0, 340, 0, 420),
         Position = UDim2.new(0.5, -170, 0.5, -210),
@@ -696,30 +850,15 @@ local function showGui()
 end
 
 CloseBtn.MouseButton1Click:Connect(hideGui)
-DockBtn.MouseButton1Click:Connect(function()
-    if not dockDragging and not dockMoved then
-        showGui()
-    end
-end)
 
---// ============ ГОРЯЧАЯ КЛАВИША ============
-UserInputService.InputBegan:Connect(function(input, processed)
-    if processed then return end
-    if input.KeyCode == HOTKEY then
-        if GuiHidden then
-            showGui()
-        else
-            hideGui()
-        end
-    end
-end)
-
---// ============================================
---// ПЕРЕТАСКИВАНИЕ (GUI, Dock, HUD)
---// ============================================
+--// Перетаскивание
 local dragging, dragInput, dragStart, startPos
 local dockDragging, dockDragInput, dockDragStart, dockStartPos, dockMoved
 local hudDragging, hudDragInput, hudDragStart, hudStartPos
+
+DockBtn.MouseButton1Click:Connect(function()
+    if not dockMoved then showGui() end
+end)
 
 DragBar.InputBegan:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
@@ -764,9 +903,7 @@ HudFrame.InputBegan:Connect(function(input)
         hudDragStart = input.Position
         hudStartPos = HudFrame.Position
         input.Changed:Connect(function()
-            if input.UserInputState == Enum.UserInputState.End then
-                hudDragging = false
-            end
+            if input.UserInputState == Enum.UserInputState.End then hudDragging = false end
         end)
     end
 end)
@@ -777,25 +914,19 @@ HudFrame.InputChanged:Connect(function(input)
 end)
 
 UserInputService.InputChanged:Connect(function(input)
-    -- Главное GUI
     if input == dragInput and dragging then
         local delta = input.Position - dragStart
         MainFrame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
     end
-    -- Dock
     if input == dockDragInput and dockDragging then
         local delta = input.Position - dockDragStart
-        if math.abs(delta.X) > 3 or math.abs(delta.Y) > 3 then
-            dockMoved = true
-        end
+        if math.abs(delta.X) > 3 or math.abs(delta.Y) > 3 then dockMoved = true end
         DockBtn.Position = UDim2.new(dockStartPos.X.Scale, dockStartPos.X.Offset + delta.X, dockStartPos.Y.Scale, dockStartPos.Y.Offset + delta.Y)
     end
-    -- HUD
     if input == hudDragInput and hudDragging then
         local delta = input.Position - hudDragStart
         HudFrame.Position = UDim2.new(hudStartPos.X.Scale, hudStartPos.X.Offset + delta.X, hudStartPos.Y.Scale, hudStartPos.Y.Offset + delta.Y)
     end
-    -- Ресайз
     if resizing then
         local delta = input.Position - resizeStart
         local newW = math.max(MIN_WIDTH, resizeStartSize.X + delta.X)
@@ -804,7 +935,15 @@ UserInputService.InputChanged:Connect(function(input)
     end
 end)
 
---// ============ КНОПКИ (клики) ============
+--// Горячая клавиша
+UserInputService.InputBegan:Connect(function(input, processed)
+    if processed then return end
+    if input.KeyCode == HOTKEY then
+        if GuiHidden then showGui() else hideGui() end
+    end
+end)
+
+--// Кнопки
 local function refreshStatus()
     ToggleStatus.Text = "AutoFarm: " .. (AutoFarmEnabled and "ON" or "OFF") ..
                         "  |  AutoAttack: " .. (AutoAttackEnabled and "ON" or "OFF")
@@ -817,7 +956,12 @@ AutoFarmBtn.MouseButton1Click:Connect(function()
     TweenService:Create(AutoFarmBtn, TweenInfo.new(0.25), {
         BackgroundColor3 = AutoFarmEnabled and THEME.ButtonOn or THEME.ButtonOff
     }):Play()
-    if AutoFarmEnabled and not CurrentTarget then switchTarget() end
+    if AutoFarmEnabled then
+        if not CurrentTarget then switchTarget() end
+        setupVelocity()
+    else
+        cleanupVelocity()
+    end
     refreshStatus()
 end)
 
@@ -855,7 +999,7 @@ DockBtn.MouseLeave:Connect(function()
     TweenService:Create(DockBtn, TweenInfo.new(0.2), {Size = UDim2.new(0, 50, 0, 50)}):Play()
 end)
 
---// ============ DROPDOWN ============
+--// DROPDOWN
 local DropdownOpen = false
 
 local function rebuildDropdown()
@@ -906,12 +1050,6 @@ local function rebuildDropdown()
             TargetDropdown.Text = p.Name
             DropdownList.Visible = false
             DropdownOpen = false
-            if not AutoFarmEnabled and not AutoAttackEnabled then
-                AutoAttackEnabled = true
-                AutoAttackBtn.Text = "Disable AutoAttack"
-                TweenService:Create(AutoAttackBtn, TweenInfo.new(0.25), {BackgroundColor3 = THEME.ButtonOn}):Play()
-                refreshStatus()
-            end
         end)
     end
     local contentH = (#DropdownList:GetChildren() - 1) * 28
@@ -931,7 +1069,7 @@ TargetDropdown.MouseButton1Click:Connect(function()
     end
 end)
 
---// ============ АНИМАЦИЯ ПОЯВЛЕНИЯ ============
+--// АНИМАЦИЯ
 local function tween(obj, time, props)
     return TweenService:Create(obj, TweenInfo.new(time, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), props)
 end
@@ -966,7 +1104,7 @@ task.spawn(function()
     ScanLabel.Text = "Scanning Players.. " .. total .. "/" .. total .. " ✓"
     task.wait(0.4)
     
-    StatusLabel.Text = "Script loaded successfully"
+    StatusLabel.Text = "Loaded • AntiKick ON"
     StatusLabel.TextColor3 = THEME.Green
     
     tween(AutoFarmBtn, 0.5, {TextTransparency = 0, BackgroundTransparency = 0}):Play()
@@ -985,5 +1123,12 @@ task.spawn(function()
     refreshStatus()
 end)
 
-print("[JJS Script v4] Loaded for " .. LocalPlayer.Name)
-print("[JJS Script v4] Hotkey: RightShift — скрыть/показать GUI")
+--// CLEANUP при повторном запуске
+_G.JJS_CLEANUP = function()
+    pcall(function() cleanupVelocity() end)
+    pcall(function() ScreenGui:Destroy() end)
+    pcall(function() TargetHud:Destroy() end)
+end
+
+print("[JJS Script v5] Loaded for " .. LocalPlayer.Name)
+print("[JJS Script v5] AntiKick: ON • Hotkey: RightShift")
