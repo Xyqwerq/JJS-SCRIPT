@@ -1,14 +1,18 @@
 --// ============================================
---// JJS Script v15 for Delta Executor
+--// JJS Script v15.1 for Delta Executor
 --// + AutoRejoin | + Persistent Config | + AutoSafeZone | + AutoServerHop
 --// Made by Xyqwerq
 --// ============================================
 
---// ============ ANTI-DUPLICATE ============
+--// ============ FORCE CLEANUP OLD FLAGS ============
 if _G.JJS_SCRIPT_LOADED then
-    warn("[JJS Script] Already running! Cleaning old instance...")
-    if _G.JJS_CLEANUP then pcall(_G.JJS_CLEANUP) end
+    warn("[JJS] Cleaning old instance...")
+    pcall(function()
+        if _G.JJS_CLEANUP then _G.JJS_CLEANUP() end
+    end)
 end
+_G.JJS_SCRIPT_LOADED = nil
+_G.JJS_CLEANUP = nil
 _G.JJS_SCRIPT_LOADED = true
 
 local Players = game:GetService("Players")
@@ -47,10 +51,22 @@ local GUI_H = 640
 local MIN_WIDTH = 240
 local MIN_HEIGHT = 500
 
---// ============ CONFIG PATH ============
+--// ============ CONFIG PATHS ============
 local CONFIG_FOLDER = "JJS_XyqwHub"
 local CONFIG_FILE = CONFIG_FOLDER .. "/config.json"
 local SCRIPT_URL = "https://raw.githubusercontent.com/Xyqwerq/JJS-SCRIPT/main/jjs_script.lua"
+
+--// ============ FILE SYSTEM DETECTION ============
+local hasFileSystem = false
+pcall(function()
+    if typeof(writefile) == "function" and typeof(readfile) == "function" and typeof(isfile) == "function" then
+        hasFileSystem = true
+    end
+end)
+
+if not hasFileSystem then
+    warn("[JJS] File system not available. Settings won't persist across rejoin.")
+end
 
 --// ============ AUTOFARM CONFIG ============
 local CONFIG = {
@@ -82,49 +98,40 @@ local ServerHopConfig = {
     LastHop = 0,
 }
 
---// ============ FILE SYSTEM HELPERS ============
-local function ensureFolderExists()
-    pcall(function()
-        if makefolder and not isfolder(CONFIG_FOLDER) then
-            makefolder(CONFIG_FOLDER)
-        end
-    end)
-end
+--// ============ STATE (declared early) ============
+local AutoFarmEnabled = false
+local AutoAttackEnabled = false
+local CurrentTarget = nil
+local ManualTarget = nil
 
+--// ============ SAFE FILE HELPERS ============
 local function saveConfig()
-    ensureFolderExists()
+    if not hasFileSystem then return end
     local data = {
-        AutoFarmEnabled    = AutoFarmEnabled,
-        AutoAttackEnabled  = AutoAttackEnabled,
-        SafeZoneEnabled    = SafeZoneConfig.Enabled,
-        SafeZoneMinHP      = SafeZoneConfig.MinHP,
-        SafeZoneMaxHP      = SafeZoneConfig.MaxHP,
-        SafeZonePosX       = SafeZoneConfig.Position.X,
-        SafeZonePosY       = SafeZoneConfig.Position.Y,
-        SafeZonePosZ       = SafeZoneConfig.Position.Z,
-        ServerHopEnabled   = ServerHopConfig.Enabled,
+        AutoFarmEnabled     = AutoFarmEnabled,
+        AutoAttackEnabled   = AutoAttackEnabled,
+        SafeZoneEnabled     = SafeZoneConfig.Enabled,
+        SafeZoneMinHP       = SafeZoneConfig.MinHP,
+        SafeZoneMaxHP       = SafeZoneConfig.MaxHP,
+        ServerHopEnabled    = ServerHopConfig.Enabled,
         ServerHopMinPlayers = ServerHopConfig.MinPlayers,
-        SavedAt = os.time(),
     }
     local ok, encoded = pcall(function() return HttpService:JSONEncode(data) end)
     if not ok then return end
-    
     pcall(function()
-        if writefile then
-            writefile(CONFIG_FILE, encoded)
-        elseif appendfile then
-            writefile(CONFIG_FILE, encoded)
+        if typeof(makefolder) == "function" and typeof(isfolder) == "function" then
+            if not isfolder(CONFIG_FOLDER) then makefolder(CONFIG_FOLDER) end
         end
+        writefile(CONFIG_FILE, encoded)
     end)
 end
 
 local function loadConfig()
-    ensureFolderExists()
+    if not hasFileSystem then return nil end
     local data = nil
     pcall(function()
-        if isfile and isfile(CONFIG_FILE) then
-            local content = readfile(CONFIG_FILE)
-            data = HttpService:JSONDecode(content)
+        if isfile(CONFIG_FILE) then
+            data = HttpService:JSONDecode(readfile(CONFIG_FILE))
         end
     end)
     return data
@@ -132,9 +139,10 @@ end
 
 --// ============ REMOVE OLD GUI ============
 for _, name in ipairs({"JJSScriptGui", "JJSTargetHud"}) do
-    if game.CoreGui:FindFirstChild(name) then
-        game.CoreGui[name]:Destroy()
-    end
+    pcall(function()
+        local obj = game.CoreGui:FindFirstChild(name)
+        if obj then obj:Destroy() end
+    end)
 end
 
 --// ============================================
@@ -170,7 +178,7 @@ DragBar.Size = UDim2.new(1, -50, 0, 22)
 DragBar.BackgroundColor3 = THEME.BackgroundDark
 DragBar.BackgroundTransparency = 1
 DragBar.BorderSizePixel = 0
-DragBar.Text = "JJS Script v15"
+DragBar.Text = "JJS Script v15.1"
 DragBar.TextColor3 = THEME.Accent
 DragBar.Font = Enum.Font.GothamBold
 DragBar.TextSize = 11
@@ -305,7 +313,7 @@ ScanLabel.TextTransparency = 1
 ScanLabel.TextXAlignment = Enum.TextXAlignment.Center
 ScanLabel.Parent = ScrollFrame
 
---// ============ UI HELPERS ============
+--// UI HELPERS
 local function makeSeparator(y)
     local sep = Instance.new("Frame")
     sep.Size = UDim2.new(1, -20, 0, 1)
@@ -377,9 +385,8 @@ local function makeInput(placeholder, y, default)
     return box, s
 end
 
---// ============ MAIN BUTTONS ============
+--// MAIN BUTTONS
 local Sep1 = makeSeparator(64)
-
 local AutoFarmBtn, AutoFarmStroke = makeButton("Enable AutoFarm", 74, 28)
 local AutoAttackBtn, AutoAttackStroke = makeButton("Enable AutoAttack", 108, 28)
 
@@ -499,7 +506,7 @@ local Footer = Instance.new("TextLabel")
 Footer.Size = UDim2.new(1, 0, 0, 12)
 Footer.Position = UDim2.new(0, 0, 1, -18)
 Footer.BackgroundTransparency = 1
-Footer.Text = "[RightShift] Hide • AutoRejoin ON • v15"
+Footer.Text = "[RightShift] Hide • v15.1"
 Footer.TextColor3 = Color3.fromRGB(120, 120, 130)
 Footer.Font = Enum.Font.Gotham
 Footer.TextSize = 9
@@ -619,11 +626,6 @@ HudHpText.Parent = HudFrame
 --// ============================================
 --// LOGIC
 --// ============================================
-local AutoFarmEnabled = false
-local AutoAttackEnabled = false
-local CurrentTarget = nil
-local ManualTarget = nil
-
 local function getAlivePlayers()
     local list = {}
     for _, p in ipairs(Players:GetPlayers()) do
@@ -708,9 +710,7 @@ task.spawn(function()
     end
 end)
 
---// ============================================
---// 🚀 AUTOFARM
---// ============================================
+--// AUTOFARM
 local stuckTimer = 0
 local lastPos = nil
 local currentPath = nil
@@ -842,14 +842,12 @@ task.spawn(function()
     end
 end)
 
---// ============================================
---// ⚔️ AUTOATTACK
---// ============================================
+--// AUTOATTACK
 local function clickMouse()
     pcall(function()
-        if mouse1click then
+        if typeof(mouse1click) == "function" then
             mouse1click()
-        elseif mouse1down and mouse1up then
+        elseif typeof(mouse1down) == "function" and typeof(mouse1up) == "function" then
             mouse1down()
             task.wait(0.02)
             mouse1up()
@@ -962,9 +960,7 @@ task.spawn(function()
     end
 end)
 
---// ============================================
---// 🛡️ AUTO SAFE ZONE
---// ============================================
+--// AUTO SAFE ZONE
 task.spawn(function()
     while true do
         task.wait(0.5)
@@ -1027,9 +1023,7 @@ task.spawn(function()
     end
 end)
 
---// ============================================
---// 🌐 AUTO SERVER HOP WITH AUTO-REJOIN
---// ============================================
+--// AUTO SERVER HOP WITH REJOIN
 local function getServerList()
     local servers = {}
     local placeId = game.PlaceId
@@ -1048,39 +1042,47 @@ local function getServerList()
     return servers
 end
 
--- ✅ Сохраняем настройки ПЕРЕД телепортом, чтобы после режоина восстановить
 local function scheduleRejoinQueue()
-    -- Уже в saveConfig сохраняются актуальные настройки
-    saveConfig()
+    pcall(saveConfig)
     
-    -- Формируем код, который выполнится ПОСЛЕ телепорта
-    local restoreCode = string.format([[
-        -- JJS AutoRejoin v15
-        task.wait(5)
-        if _G.JJS_SCRIPT_LOADED then return end
-        local ok, err = pcall(function()
-            loadstring(game:HttpGet("%s"))()
-        end)
-        if not ok then
-            warn("[JJS Rejoin] Failed to reload: " .. tostring(err))
-        end
-    ]], SCRIPT_URL)
+    local restoreCode = 'task.wait(5)\n'
+        .. 'if _G.JJS_SCRIPT_LOADED then _G.JJS_SCRIPT_LOADED = nil end\n'
+        .. 'loadstring(game:HttpGet("' .. SCRIPT_URL .. '"))()'
     
     local queued = false
-    if queue_on_teleport then
-        pcall(function() queue_on_teleport(restoreCode); queued = true end)
-    elseif queueonteleport then
-        pcall(function() queueonteleport(restoreCode); queued = true end)
-    elseif syn and syn.queue_on_teleport then
-        pcall(function() syn.queue_on_teleport(restoreCode); queued = true end)
-    elseif fluxus and fluxus.queue_on_teleport then
-        pcall(function() fluxus.queue_on_teleport(restoreCode); queued = true end)
-    elseif request and queue_on_teleport then
-        pcall(function() queue_on_teleport(restoreCode); queued = true end)
+    pcall(function()
+        if typeof(queue_on_teleport) == "function" then
+            queue_on_teleport(restoreCode)
+            queued = true
+        end
+    end)
+    if not queued then
+        pcall(function()
+            if typeof(queueonteleport) == "function" then
+                queueonteleport(restoreCode)
+                queued = true
+            end
+        end)
+    end
+    if not queued then
+        pcall(function()
+            if syn and typeof(syn.queue_on_teleport) == "function" then
+                syn.queue_on_teleport(restoreCode)
+                queued = true
+            end
+        end)
+    end
+    if not queued then
+        pcall(function()
+            if fluxus and typeof(fluxus.queue_on_teleport) == "function" then
+                fluxus.queue_on_teleport(restoreCode)
+                queued = true
+            end
+        end)
     end
     
     if not queued then
-        warn("[JJS] queue_on_teleport недоступен! Скрипт не перезапустится.")
+        warn("[JJS] queue_on_teleport недоступен!")
     else
         print("[JJS] Rejoin queue scheduled ✓")
     end
@@ -1097,7 +1099,6 @@ task.spawn(function()
             print("[JJS] Only " .. playerCount .. " players → hopping...")
             ServerHopConfig.LastHop = tick()
             
-            -- Сохраняем настройки + ставим в очередь перезапуск
             scheduleRejoinQueue()
             task.wait(0.5)
             
@@ -1117,9 +1118,7 @@ task.spawn(function()
     end
 end)
 
---// ============================================
---// 🛡️ ANTIKICK
---// ============================================
+--// ANTIKICK
 local antiKickEnabled = true
 
 LocalPlayer.Idled:Connect(function()
@@ -1155,9 +1154,7 @@ if mt then
     setreadonly(mt, true)
 end
 
---// ============================================
 --// HIDE / SHOW
---// ============================================
 local GuiHidden = false
 
 local function hideGui()
@@ -1292,9 +1289,7 @@ UserInputService.InputBegan:Connect(function(input, processed)
     end
 end)
 
---// ============================================
---// BUTTON LOGIC (with auto-save)
---// ============================================
+--// BUTTON LOGIC
 local function refreshStatus()
     ToggleStatus.Text = "AutoFarm: " .. (AutoFarmEnabled and "ON" or "OFF") ..
                         " | AutoAttack: " .. (AutoAttackEnabled and "ON" or "OFF")
@@ -1309,7 +1304,7 @@ AutoFarmBtn.MouseButton1Click:Connect(function()
     }):Play()
     if AutoFarmEnabled and not CurrentTarget then switchTarget() end
     refreshStatus()
-    saveConfig()  -- ✅ автосохранение
+    pcall(saveConfig)
 end)
 
 AutoAttackBtn.MouseButton1Click:Connect(function()
@@ -1320,7 +1315,7 @@ AutoAttackBtn.MouseButton1Click:Connect(function()
     }):Play()
     if AutoAttackEnabled and not CurrentTarget then switchTarget() end
     refreshStatus()
-    saveConfig()
+    pcall(saveConfig)
 end)
 
 SafeZoneBtn.MouseButton1Click:Connect(function()
@@ -1340,7 +1335,7 @@ SafeZoneBtn.MouseButton1Click:Connect(function()
             end
         end
     end
-    saveConfig()
+    pcall(saveConfig)
 end)
 
 MinHPInput.FocusLost:Connect(function()
@@ -1350,7 +1345,7 @@ MinHPInput.FocusLost:Connect(function()
     else
         MinHPInput.Text = tostring(SafeZoneConfig.MinHP)
     end
-    saveConfig()
+    pcall(saveConfig)
 end)
 
 MaxHPInput.FocusLost:Connect(function()
@@ -1360,7 +1355,7 @@ MaxHPInput.FocusLost:Connect(function()
     else
         MaxHPInput.Text = tostring(SafeZoneConfig.MaxHP)
     end
-    saveConfig()
+    pcall(saveConfig)
 end)
 
 ServerHopBtn.MouseButton1Click:Connect(function()
@@ -1369,7 +1364,7 @@ ServerHopBtn.MouseButton1Click:Connect(function()
     TweenService:Create(ServerHopBtn, TweenInfo.new(0.25), {
         BackgroundColor3 = ServerHopConfig.Enabled and THEME.ButtonOn or THEME.ButtonOff
     }):Play()
-    saveConfig()
+    pcall(saveConfig)
 end)
 
 MinPlayersInput.FocusLost:Connect(function()
@@ -1379,7 +1374,7 @@ MinPlayersInput.FocusLost:Connect(function()
     else
         MinPlayersInput.Text = tostring(ServerHopConfig.MinPlayers)
     end
-    saveConfig()
+    pcall(saveConfig)
 end)
 
 DockBtn.MouseEnter:Connect(function()
@@ -1496,8 +1491,9 @@ task.spawn(function()
     ScanLabel.Text = "Scanning Players.. " .. total .. "/" .. total .. " ✓"
     task.wait(0.4)
 
-    -- ✅ ЗАГРУЖАЕМ СОХРАНЁННЫЕ НАСТРОЙКИ
-    local saved = loadConfig()
+    -- RESTORE SETTINGS
+    local saved = nil
+    pcall(function() saved = loadConfig() end)
     if saved then
         StatusLabel.Text = "Restoring settings..."
         StatusLabel.TextColor3 = THEME.Accent
@@ -1539,7 +1535,7 @@ task.spawn(function()
         end
     end
 
-    StatusLabel.Text = "Loaded • AntiKick ON • AutoRejoin"
+    StatusLabel.Text = "Loaded • AntiKick ON"
     StatusLabel.TextColor3 = THEME.Green
 
     tween(AutoFarmBtn, 0.5, {TextTransparency = 0, BackgroundTransparency = 0}):Play()
@@ -1583,5 +1579,10 @@ _G.JJS_CLEANUP = function()
     pcall(function() TargetHud:Destroy() end)
 end
 
-print("[JJS Script v15] Loaded for " .. LocalPlayer.Name)
-print("[JJS Script v15] Made by Xyqwerq | AutoRejoin + Persistent Settings")
+print("[JJS Script v15.1] Loaded for " .. LocalPlayer.Name)
+print("[JJS Script v15.1] Made by Xyqwerq")
+if hasFileSystem then
+    print("[JJS] File system: OK (settings will persist)")
+else
+    print("[JJS] File system: NOT AVAILABLE (settings won't persist)")
+end
