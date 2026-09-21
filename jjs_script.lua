@@ -1,6 +1,6 @@
 --// ============================================
---// JJS Script v9 for Delta Executor
---// + WORKING AutoFarm (CFrame-stepping) | + AntiKick
+--// JJS Script v11 for Delta Executor
+--// + WORKING AutoAttack (Multi-Method) | + CFrame-Step AutoFarm
 --// Made by Xyqwerq
 --// ============================================
 
@@ -15,23 +15,24 @@ local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
+local VirtualUser = game:GetService("VirtualUser")
 local LocalPlayer = Players.LocalPlayer
 local Mouse = LocalPlayer:GetMouse()
 
 --// ============ ЦВЕТА ============
 local THEME = {
-    Background   = Color3.fromRGB(35, 35, 40),
+    Background     = Color3.fromRGB(35, 35, 40),
     BackgroundDark = Color3.fromRGB(28, 28, 33),
-    Stroke       = Color3.fromRGB(160, 60, 255),
-    Text         = Color3.fromRGB(255, 255, 255),
-    SubText      = Color3.fromRGB(200, 200, 210),
-    Accent       = Color3.fromRGB(160, 60, 255),
-    ButtonOff    = Color3.fromRGB(55, 55, 65),
-    ButtonOn     = Color3.fromRGB(120, 50, 200),
-    Green        = Color3.fromRGB(90, 255, 130),
-    Red          = Color3.fromRGB(255, 90, 90),
-    Credit       = Color3.fromRGB(180, 120, 255),
-    DropdownBg   = Color3.fromRGB(45, 45, 52),
+    Stroke         = Color3.fromRGB(160, 60, 255),
+    Text           = Color3.fromRGB(255, 255, 255),
+    SubText        = Color3.fromRGB(200, 200, 210),
+    Accent         = Color3.fromRGB(160, 60, 255),
+    ButtonOff      = Color3.fromRGB(55, 55, 65),
+    ButtonOn       = Color3.fromRGB(120, 50, 200),
+    Green          = Color3.fromRGB(90, 255, 130),
+    Red            = Color3.fromRGB(255, 90, 90),
+    Credit         = Color3.fromRGB(180, 120, 255),
+    DropdownBg     = Color3.fromRGB(45, 45, 52),
 }
 
 local HOTKEY = Enum.KeyCode.RightShift
@@ -40,13 +41,13 @@ local GUI_H = 350
 local MIN_WIDTH = 210
 local MIN_HEIGHT = 320
 
---// ============ НАСТРОЙКИ AUTOFARM (CFrame-step) ============
+--// ============ НАСТРОЙКИ AUTOFARM ============
 local CONFIG = {
-    FOLLOW_DISTANCE = 5,       -- насколько близко держаться
-    STEP_INTERVAL   = 0.05,    -- каждые 0.05 сек шаг (20 раз в сек — античит-френдли)
-    STEP_SPEED      = 0.35,    -- % от дистанции за шаг (0.35 = быстро, 0.15 = плавно)
-    MAX_STEP        = 3,       -- макс studs за один шаг (защита от резкого движения)
-    DEADZONE        = 4,       -- мёртвая зона около цели
+    FOLLOW_DISTANCE = 1.5,     -- очень близко
+    STEP_INTERVAL   = 0.04,
+    STEP_SPEED      = 0.45,
+    MAX_STEP        = 2,
+    DEADZONE        = 1,
     JUMP_ON_STUCK   = true,
 }
 
@@ -58,7 +59,7 @@ for _, name in ipairs({"JJSScriptGui", "JJSTargetHud"}) do
 end
 
 --// ============================================
---// GUI
+--// ГЛАВНОЕ GUI
 --// ============================================
 local ScreenGui = Instance.new("ScreenGui")
 ScreenGui.Name = "JJSScriptGui"
@@ -90,7 +91,7 @@ DragBar.Size = UDim2.new(1, -50, 0, 22)
 DragBar.BackgroundColor3 = THEME.BackgroundDark
 DragBar.BackgroundTransparency = 1
 DragBar.BorderSizePixel = 0
-DragBar.Text = "JJS Script v9"
+DragBar.Text = "JJS Script v11"
 DragBar.TextColor3 = THEME.Accent
 DragBar.Font = Enum.Font.GothamBold
 DragBar.TextSize = 11
@@ -372,7 +373,7 @@ local Footer = Instance.new("TextLabel")
 Footer.Size = UDim2.new(1, 0, 0, 12)
 Footer.Position = UDim2.new(0, 0, 1, -18)
 Footer.BackgroundTransparency = 1
-Footer.Text = "[RightShift] • AntiKick ON • v9"
+Footer.Text = "[RightShift] • AntiKick ON • v11"
 Footer.TextColor3 = Color3.fromRGB(120, 120, 130)
 Footer.Font = Enum.Font.Gotham
 Footer.TextSize = 9
@@ -580,11 +581,8 @@ task.spawn(function()
 end)
 
 --// ============================================
---// 🚀 AUTOFARM v9 — CFrame STEPPING
+--// 🚀 AUTOFARM — CFrame Stepping
 --// ============================================
--- Двигаем персонажа МАЛЕНЬКИМИ шагами через CFrame
--- Не телепорт, а имитация ходьбы — античит не ловит
-
 local stuckTimer = 0
 local lastPos = nil
 
@@ -605,28 +603,23 @@ local function positionBehindTarget()
     local myPos = myRoot.Position
     local targetPos = targetRoot.Position
 
-    -- Считаем дистанцию до позиции сзади
+    -- Позиция сзади впритык
     local behindCF = targetRoot.CFrame * CFrame.new(0, 0, CONFIG.FOLLOW_DISTANCE)
     local behindPos = behindCF.Position
     local dist = (behindPos - myPos).Magnitude
 
-    -- Мёртвая зона — стоим
     if dist < CONFIG.DEADZONE then
         stuckTimer = 0
         return
     end
 
-    -- ✅ ГЛАВНОЕ: маленький шаг к цели (не больше MAX_STEP studs)
     local direction = (behindPos - myPos).Unit
     local stepSize = math.min(dist * CONFIG.STEP_SPEED, CONFIG.MAX_STEP)
     local newPos = myPos + direction * stepSize
 
-    -- ✅ Двигаем через CFrame с сохранением поворота
-    -- НЕ трогаем Y (высота) — пусть физика сама справляется
     local newCF = CFrame.new(newPos, Vector3.new(targetPos.X, newPos.Y, targetPos.Z))
     myRoot.CFrame = newCF
 
-    -- Anti-stuck: если стоим на месте — прыгаем
     if CONFIG.JUMP_ON_STUCK then
         if lastPos and (myPos - lastPos).Magnitude < 0.3 then
             stuckTimer = stuckTimer + CONFIG.STEP_INTERVAL
@@ -660,36 +653,128 @@ task.spawn(function()
     end
 end)
 
---// AUTOATTACK
-local VirtualUser = game:GetService("VirtualUser")
+--// ============================================
+--// ⚔️ AUTOATTACK v11 — Multi-Method
+--// ============================================
 
+-- Нажатие клавиши через VirtualInputManager
+local function pressKey(keyCode)
+    pcall(function()
+        local VirtualInputManager = game:GetService("VirtualInputManager")
+        VirtualInputManager:SendKeyEvent(true, keyCode, false, game)
+        task.wait(0.03)
+        VirtualInputManager:SendKeyEvent(false, keyCode, false, game)
+    end)
+end
+
+-- Активация всех инструментов
+local function activateAllTools()
+    local myChar = LocalPlayer.Character
+    if not myChar then return end
+    
+    -- Инструменты в руках
+    for _, tool in ipairs(myChar:GetChildren()) do
+        if tool:IsA("Tool") then
+            pcall(function() tool:Activate() end)
+        end
+    end
+    
+    -- Инструменты в рюкзаке
+    local backpack = LocalPlayer:FindFirstChild("Backpack")
+    if backpack then
+        for _, tool in ipairs(backpack:GetChildren()) do
+            if tool:IsA("Tool") then
+                pcall(function() tool.Parent = myChar end)
+                task.wait(0.02)
+                pcall(function() tool:Activate() end)
+            end
+        end
+    end
+end
+
+-- Прямой вызов remote'ов атаки
+local function fireAttackRemotes(targetChar)
+    if not targetChar then return end
+    
+    local remotePaths = {
+        {"ReplicatedStorage", "Remotes", "Attack"},
+        {"ReplicatedStorage", "Remotes", "Combat", "Attack"},
+        {"ReplicatedStorage", "Remotes", "Combat", "M1"},
+        {"ReplicatedStorage", "Remotes", "Skill"},
+        {"ReplicatedStorage", "Remotes", "UseSkill"},
+        {"ReplicatedStorage", "Remotes", "Hit"},
+        {"ReplicatedStorage", "RemoteEvents", "Attack"},
+        {"ReplicatedStorage", "Packages", "Combat", "Attack"},
+        {"ReplicatedStorage", "Events", "Attack"},
+        {"ReplicatedStorage", "Shared", "Attack"},
+    }
+    
+    for _, path in ipairs(remotePaths) do
+        local obj = game
+        local ok = true
+        for _, name in ipairs(path) do
+            if obj then
+                obj = obj:FindFirstChild(name)
+            else
+                ok = false
+                break
+            end
+        end
+        if ok and obj then
+            if obj:IsA("RemoteEvent") then
+                pcall(function() obj:FireServer() end)
+                pcall(function() obj:FireServer(targetChar) end)
+                pcall(function() obj:FireServer(targetChar, "M1") end)
+            elseif obj:IsA("RemoteFunction") then
+                pcall(function() obj:InvokeServer() end)
+                pcall(function() obj:InvokeServer(targetChar) end)
+            end
+        end
+    end
+end
+
+-- Основная функция атаки
 local function tryAttack()
     if not CurrentTarget or not CurrentTarget.Character then return end
     local myChar = LocalPlayer.Character
     if not myChar then return end
+    local myHum = myChar:FindFirstChildOfClass("Humanoid")
+    if not myHum or myHum.Health <= 0 then return end
+
     local targetHum = CurrentTarget.Character:FindFirstChildOfClass("Humanoid")
     if not targetHum or targetHum.Health <= 0 then return end
 
     local myRoot = myChar:FindFirstChild("HumanoidRootPart")
     local targetRoot = CurrentTarget.Character:FindFirstChild("HumanoidRootPart")
     if not myRoot or not targetRoot then return end
-    if (myRoot.Position - targetRoot.Position).Magnitude > 20 then return end
 
-    local tool = myChar:FindFirstChildOfClass("Tool")
-    if tool then
-        pcall(function() tool:Activate() end)
-    end
+    local dist = (myRoot.Position - targetRoot.Position).Magnitude
+    if dist > 12 then return end
+
+    -- Метод 1: Клик M1
     pcall(function()
         VirtualUser:CaptureController()
         VirtualUser:ClickButton1(Vector2.new(0, 0))
     end)
+
+    -- Метод 2: Активация Tool'ов
+    activateAllTools()
+
+    -- Метод 3: Нажатие клавиш 1-4 (скиллы)
+    pressKey(Enum.KeyCode.One)
+    pressKey(Enum.KeyCode.Two)
+    pressKey(Enum.KeyCode.Three)
+    pressKey(Enum.KeyCode.Four)
+
+    -- Метод 4: Remote'ы
+    fireAttackRemotes(CurrentTarget.Character)
 end
 
 task.spawn(function()
     while true do
-        if AutoAttackEnabled then
+        if AutoAttackEnabled and CurrentTarget then
             tryAttack()
-            task.wait(0.1)
+            task.wait(0.15)
         else
             task.wait(0.2)
         end
@@ -703,7 +788,9 @@ task.spawn(function()
     end
 end)
 
---// ANTIKICK
+--// ============================================
+--// 🛡️ ANTIKICK
+--// ============================================
 local antiKickEnabled = true
 
 LocalPlayer.Idled:Connect(function()
@@ -739,7 +826,9 @@ if mt then
     setreadonly(mt, true)
 end
 
+--// ============================================
 --// СКРЫТИЕ / ПОКАЗ
+--// ============================================
 local GuiHidden = false
 
 local function hideGui()
@@ -783,6 +872,7 @@ end
 
 CloseBtn.MouseButton1Click:Connect(hideGui)
 
+--// Перетаскивание
 local dragging, dragInput, dragStart, startPos
 local dockDragging, dockDragInput, dockDragStart, dockStartPos, dockMoved
 local hudDragging, hudDragInput, hudDragStart, hudStartPos
@@ -873,6 +963,7 @@ UserInputService.InputBegan:Connect(function(input, processed)
     end
 end)
 
+--// Кнопки
 local function refreshStatus()
     ToggleStatus.Text = "AutoFarm: " .. (AutoFarmEnabled and "ON" or "OFF") ..
                         " | AutoAttack: " .. (AutoAttackEnabled and "ON" or "OFF")
@@ -1050,5 +1141,5 @@ _G.JJS_CLEANUP = function()
     pcall(function() TargetHud:Destroy() end)
 end
 
-print("[JJS Script v9] Loaded for " .. LocalPlayer.Name)
-print("[JJS Script v9] Made by Xyqwerq | CFrame-stepping AutoFarm")
+print("[JJS Script v11] Loaded for " .. LocalPlayer.Name)
+print("[JJS Script v11] Made by Xyqwerq | CFrame-step AutoFarm + Multi-method AutoAttack")
