@@ -1,6 +1,6 @@
 --// ============================================
---// JJS Script v14 for Delta Executor
---// + Fixed AutoFarm | + Pathfinding | + AutoSafeZone | + AutoServerHop
+--// JJS Script v15 for Delta Executor
+--// + AutoRejoin | + Persistent Config | + AutoSafeZone | + AutoServerHop
 --// Made by Xyqwerq
 --// ============================================
 
@@ -47,6 +47,11 @@ local GUI_H = 640
 local MIN_WIDTH = 240
 local MIN_HEIGHT = 500
 
+--// ============ CONFIG PATH ============
+local CONFIG_FOLDER = "JJS_XyqwHub"
+local CONFIG_FILE = CONFIG_FOLDER .. "/config.json"
+local SCRIPT_URL = "https://raw.githubusercontent.com/Xyqwerq/JJS-SCRIPT/main/jjs_script.lua"
+
 --// ============ AUTOFARM CONFIG ============
 local CONFIG = {
     FOLLOW_DISTANCE = 1.5,
@@ -76,6 +81,54 @@ local ServerHopConfig = {
     CheckInterval = 15,
     LastHop = 0,
 }
+
+--// ============ FILE SYSTEM HELPERS ============
+local function ensureFolderExists()
+    pcall(function()
+        if makefolder and not isfolder(CONFIG_FOLDER) then
+            makefolder(CONFIG_FOLDER)
+        end
+    end)
+end
+
+local function saveConfig()
+    ensureFolderExists()
+    local data = {
+        AutoFarmEnabled    = AutoFarmEnabled,
+        AutoAttackEnabled  = AutoAttackEnabled,
+        SafeZoneEnabled    = SafeZoneConfig.Enabled,
+        SafeZoneMinHP      = SafeZoneConfig.MinHP,
+        SafeZoneMaxHP      = SafeZoneConfig.MaxHP,
+        SafeZonePosX       = SafeZoneConfig.Position.X,
+        SafeZonePosY       = SafeZoneConfig.Position.Y,
+        SafeZonePosZ       = SafeZoneConfig.Position.Z,
+        ServerHopEnabled   = ServerHopConfig.Enabled,
+        ServerHopMinPlayers = ServerHopConfig.MinPlayers,
+        SavedAt = os.time(),
+    }
+    local ok, encoded = pcall(function() return HttpService:JSONEncode(data) end)
+    if not ok then return end
+    
+    pcall(function()
+        if writefile then
+            writefile(CONFIG_FILE, encoded)
+        elseif appendfile then
+            writefile(CONFIG_FILE, encoded)
+        end
+    end)
+end
+
+local function loadConfig()
+    ensureFolderExists()
+    local data = nil
+    pcall(function()
+        if isfile and isfile(CONFIG_FILE) then
+            local content = readfile(CONFIG_FILE)
+            data = HttpService:JSONDecode(content)
+        end
+    end)
+    return data
+end
 
 --// ============ REMOVE OLD GUI ============
 for _, name in ipairs({"JJSScriptGui", "JJSTargetHud"}) do
@@ -117,7 +170,7 @@ DragBar.Size = UDim2.new(1, -50, 0, 22)
 DragBar.BackgroundColor3 = THEME.BackgroundDark
 DragBar.BackgroundTransparency = 1
 DragBar.BorderSizePixel = 0
-DragBar.Text = "JJS Script v14"
+DragBar.Text = "JJS Script v15"
 DragBar.TextColor3 = THEME.Accent
 DragBar.Font = Enum.Font.GothamBold
 DragBar.TextSize = 11
@@ -203,7 +256,7 @@ ResizeHandle.InputBegan:Connect(function(input)
     end
 end)
 
---// SCROLLING CONTENT
+--// SCROLL FRAME
 local ScrollFrame = Instance.new("ScrollingFrame")
 ScrollFrame.Size = UDim2.new(1, 0, 1, -50)
 ScrollFrame.Position = UDim2.new(0, 0, 0, 26)
@@ -215,7 +268,7 @@ ScrollFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
 ScrollFrame.AutomaticCanvasSize = Enum.AutomaticSize.Y
 ScrollFrame.Parent = MainFrame
 
---// HEADER LABELS
+--// HEADER
 local HelloLabel = Instance.new("TextLabel")
 HelloLabel.Size = UDim2.new(1, -20, 0, 26)
 HelloLabel.Position = UDim2.new(0, 10, 0, 2)
@@ -316,7 +369,6 @@ local function makeInput(placeholder, y, default)
     box.Font = Enum.Font.GothamMedium
     box.TextSize = 11
     box.TextTransparency = 1
-    box.PlaceholderColor3 = Color3.fromRGB(150, 150, 160)
     box.AutoButtonColor = false
     box.ClearTextOnFocus = false
     box.Parent = ScrollFrame
@@ -412,30 +464,25 @@ UIListLayout.Parent = DropdownList
 
 local Sep3 = makeSeparator(250)
 
---// ============ SAFE ZONE SECTION ============
+--// SAFE ZONE
 local SafeZoneTitle = makeLabel("Auto Safe Zone", 260)
-
 local SafeZoneBtn, SafeZoneStroke = makeButton("Enable Auto Safe Zone", 278, 28)
-
 local MinHPLabel = makeLabel("Min HP (teleport to safe zone):", 312, THEME.SubText, 10)
 local MinHPInput, MinHPStroke = makeInput("30", 328, "30")
-
 local MaxHPLabel = makeLabel("Max HP (return from safe zone):", 358, THEME.SubText, 10)
 local MaxHPInput, MaxHPStroke = makeInput("90", 374, "90")
 
 local Sep4 = makeSeparator(408)
 
---// ============ SERVER HOP SECTION ============
+--// SERVER HOP
 local ServerHopTitle = makeLabel("Auto Server Hop", 418)
-
 local ServerHopBtn, ServerHopStroke = makeButton("Enable Auto Server Hop", 436, 28)
-
 local MinPlayersLabel = makeLabel("Hop when players count below:", 470, THEME.SubText, 10)
 local MinPlayersInput, MinPlayersStroke = makeInput("3", 486, "3")
 
 local Sep5 = makeSeparator(520)
 
---// ============ FOOTER (fixed) ============
+--// FOOTER
 local CreditLabel = Instance.new("TextLabel")
 CreditLabel.Size = UDim2.new(1, 0, 0, 14)
 CreditLabel.Position = UDim2.new(0, 0, 1, -32)
@@ -452,7 +499,7 @@ local Footer = Instance.new("TextLabel")
 Footer.Size = UDim2.new(1, 0, 0, 12)
 Footer.Position = UDim2.new(0, 0, 1, -18)
 Footer.BackgroundTransparency = 1
-Footer.Text = "[RightShift] Hide • AntiKick ON • v14"
+Footer.Text = "[RightShift] Hide • AutoRejoin ON • v15"
 Footer.TextColor3 = Color3.fromRGB(120, 120, 130)
 Footer.Font = Enum.Font.Gotham
 Footer.TextSize = 9
@@ -644,7 +691,6 @@ local function updateHud()
     HudAvatar.Image = "https://www.roblox.com/headshot-thumbnail/image?userId=" .. CurrentTarget.UserId .. "&width=150&height=150&format=png"
 end
 
--- Target switching on death
 task.spawn(function()
     while true do
         task.wait(0.3)
@@ -663,7 +709,7 @@ task.spawn(function()
 end)
 
 --// ============================================
---// 🚀 AUTOFARM (v12 logic + Pathfinding fallback)
+--// 🚀 AUTOFARM
 --// ============================================
 local stuckTimer = 0
 local lastPos = nil
@@ -715,7 +761,6 @@ local function positionBehindTarget()
         return
     end
 
-    -- ✅ Если цель далеко (>25) — используем Pathfinding чтобы не врезаться
     if dist > 25 then
         local now = tick()
         if now - lastRepathTime > CONFIG.REPATH_INTERVAL or not currentPath then
@@ -732,12 +777,10 @@ local function positionBehindTarget()
                     if wp.Action == Enum.PathWaypointAction.Jump then
                         pcall(function() myHum.Jump = true end)
                     end
-                    
                     local wpPos = wp.Position
                     if (wpPos - myPos).Magnitude < CONFIG.WAYPOINT_REACH then
                         currentWaypointIndex = currentWaypointIndex + 1
                     else
-                        -- Плавный шаг к waypoint
                         local direction = (wpPos - myPos).Unit
                         local stepSize = math.min((wpPos - myPos).Magnitude * CONFIG.STEP_SPEED, CONFIG.MAX_STEP)
                         local newPos = myPos + direction * stepSize
@@ -749,7 +792,6 @@ local function positionBehindTarget()
                 currentPath = nil
             end
         else
-            -- Fallback — прямой шаг
             local direction = (behindPos - myPos).Unit
             local stepSize = math.min(dist * CONFIG.STEP_SPEED, CONFIG.MAX_STEP)
             local newPos = myPos + direction * stepSize
@@ -757,7 +799,6 @@ local function positionBehindTarget()
             myRoot.CFrame = myRoot.CFrame:Lerp(newCF, 0.7)
         end
     else
-        -- ✅ Близко — прямое CFrame-движение (быстро, античит не ловит)
         local direction = (behindPos - myPos).Unit
         local stepSize = math.min(dist * CONFIG.STEP_SPEED, CONFIG.MAX_STEP)
         local newPos = myPos + direction * stepSize
@@ -939,18 +980,17 @@ task.spawn(function()
             continue
         end
         
-        -- ✅ HP упало ниже Min → телепорт в сейф-зону
         if not SafeZoneConfig.InSafeZone and myHum.Health <= SafeZoneConfig.MinHP then
             SafeZoneConfig.ReturnPos = myRoot.CFrame
             SafeZoneConfig.InSafeZone = true
             
-            -- Телепорт ПОД карту (безопасная зона)
             pcall(function()
                 myRoot.CFrame = CFrame.new(SafeZoneConfig.Position)
             end)
             
-            -- Дополнительно: закрепляем velocity чтобы не падал
             pcall(function()
+                local existing = myRoot:FindFirstChild("JJS_SafeZone")
+                if existing then existing:Destroy() end
                 local bv = Instance.new("BodyPosition")
                 bv.Position = SafeZoneConfig.Position
                 bv.MaxForce = Vector3.new(math.huge, math.huge, math.huge)
@@ -959,18 +999,15 @@ task.spawn(function()
                 bv.Parent = myRoot
             end)
             
-            print("[JJS] HP low → entered safe zone at HP " .. math.floor(myHum.Health))
+            print("[JJS] HP low → entered safe zone")
         end
         
-        -- ✅ HP восстановилось → возвращаемся
         if SafeZoneConfig.InSafeZone and myHum.Health >= SafeZoneConfig.MaxHP then
-            -- Убираем BodyPosition
             pcall(function()
                 local bv = myRoot:FindFirstChild("JJS_SafeZone")
                 if bv then bv:Destroy() end
             end)
             
-            -- Возвращаемся на исходную позицию
             if SafeZoneConfig.ReturnPos then
                 pcall(function()
                     myRoot.CFrame = SafeZoneConfig.ReturnPos
@@ -982,7 +1019,6 @@ task.spawn(function()
             print("[JJS] HP restored → returning from safe zone")
         end
         
-        -- ✅ Пока в сейф-зоне — держим позицию
         if SafeZoneConfig.InSafeZone then
             pcall(function()
                 myRoot.CFrame = CFrame.new(SafeZoneConfig.Position)
@@ -992,19 +1028,16 @@ task.spawn(function()
 end)
 
 --// ============================================
---// 🌐 AUTO SERVER HOP
+--// 🌐 AUTO SERVER HOP WITH AUTO-REJOIN
 --// ============================================
 local function getServerList()
     local servers = {}
     local placeId = game.PlaceId
-    local cursor = ""
-    
     local ok, result = pcall(function()
         return HttpService:JSONDecode(
-            game:HttpGet("https://games.roblox.com/v1/games/" .. placeId .. "/servers/Public?sortOrder=Asc&limit=100&cursor=" .. cursor)
+            game:HttpGet("https://games.roblox.com/v1/games/" .. placeId .. "/servers/Public?sortOrder=Asc&limit=100")
         )
     end)
-    
     if ok and result and result.data then
         for _, server in ipairs(result.data) do
             if server.playing and server.playing < server.maxPlayers and server.id ~= game.JobId then
@@ -1015,6 +1048,44 @@ local function getServerList()
     return servers
 end
 
+-- ✅ Сохраняем настройки ПЕРЕД телепортом, чтобы после режоина восстановить
+local function scheduleRejoinQueue()
+    -- Уже в saveConfig сохраняются актуальные настройки
+    saveConfig()
+    
+    -- Формируем код, который выполнится ПОСЛЕ телепорта
+    local restoreCode = string.format([[
+        -- JJS AutoRejoin v15
+        task.wait(5)
+        if _G.JJS_SCRIPT_LOADED then return end
+        local ok, err = pcall(function()
+            loadstring(game:HttpGet("%s"))()
+        end)
+        if not ok then
+            warn("[JJS Rejoin] Failed to reload: " .. tostring(err))
+        end
+    ]], SCRIPT_URL)
+    
+    local queued = false
+    if queue_on_teleport then
+        pcall(function() queue_on_teleport(restoreCode); queued = true end)
+    elseif queueonteleport then
+        pcall(function() queueonteleport(restoreCode); queued = true end)
+    elseif syn and syn.queue_on_teleport then
+        pcall(function() syn.queue_on_teleport(restoreCode); queued = true end)
+    elseif fluxus and fluxus.queue_on_teleport then
+        pcall(function() fluxus.queue_on_teleport(restoreCode); queued = true end)
+    elseif request and queue_on_teleport then
+        pcall(function() queue_on_teleport(restoreCode); queued = true end)
+    end
+    
+    if not queued then
+        warn("[JJS] queue_on_teleport недоступен! Скрипт не перезапустится.")
+    else
+        print("[JJS] Rejoin queue scheduled ✓")
+    end
+end
+
 task.spawn(function()
     while true do
         task.wait(ServerHopConfig.CheckInterval)
@@ -1023,8 +1094,12 @@ task.spawn(function()
         
         local playerCount = #Players:GetPlayers()
         if playerCount < ServerHopConfig.MinPlayers then
-            print("[JJS] Only " .. playerCount .. " players, hopping server...")
+            print("[JJS] Only " .. playerCount .. " players → hopping...")
             ServerHopConfig.LastHop = tick()
+            
+            -- Сохраняем настройки + ставим в очередь перезапуск
+            scheduleRejoinQueue()
+            task.wait(0.5)
             
             local servers = getServerList()
             if #servers > 0 then
@@ -1033,7 +1108,6 @@ task.spawn(function()
                     TeleportService:TeleportToPlaceInstance(game.PlaceId, newServer, LocalPlayer)
                 end)
             else
-                -- Фолбэк — обычный реjoin
                 pcall(function()
                     TeleportService:Teleport(game.PlaceId, LocalPlayer)
                 end)
@@ -1082,7 +1156,7 @@ if mt then
 end
 
 --// ============================================
---// HIDE/SHOW
+--// HIDE / SHOW
 --// ============================================
 local GuiHidden = false
 
@@ -1219,7 +1293,7 @@ UserInputService.InputBegan:Connect(function(input, processed)
 end)
 
 --// ============================================
---// BUTTON LOGIC
+--// BUTTON LOGIC (with auto-save)
 --// ============================================
 local function refreshStatus()
     ToggleStatus.Text = "AutoFarm: " .. (AutoFarmEnabled and "ON" or "OFF") ..
@@ -1235,6 +1309,7 @@ AutoFarmBtn.MouseButton1Click:Connect(function()
     }):Play()
     if AutoFarmEnabled and not CurrentTarget then switchTarget() end
     refreshStatus()
+    saveConfig()  -- ✅ автосохранение
 end)
 
 AutoAttackBtn.MouseButton1Click:Connect(function()
@@ -1245,9 +1320,9 @@ AutoAttackBtn.MouseButton1Click:Connect(function()
     }):Play()
     if AutoAttackEnabled and not CurrentTarget then switchTarget() end
     refreshStatus()
+    saveConfig()
 end)
 
---// SAFE ZONE BUTTON
 SafeZoneBtn.MouseButton1Click:Connect(function()
     SafeZoneConfig.Enabled = not SafeZoneConfig.Enabled
     SafeZoneBtn.Text = SafeZoneConfig.Enabled and "Disable Auto Safe Zone" or "Enable Auto Safe Zone"
@@ -1256,7 +1331,6 @@ SafeZoneBtn.MouseButton1Click:Connect(function()
     }):Play()
     if not SafeZoneConfig.Enabled then
         SafeZoneConfig.InSafeZone = false
-        -- Убираем BodyPosition если остался
         local myChar = LocalPlayer.Character
         if myChar then
             local myRoot = myChar:FindFirstChild("HumanoidRootPart")
@@ -1266,6 +1340,7 @@ SafeZoneBtn.MouseButton1Click:Connect(function()
             end
         end
     end
+    saveConfig()
 end)
 
 MinHPInput.FocusLost:Connect(function()
@@ -1275,6 +1350,7 @@ MinHPInput.FocusLost:Connect(function()
     else
         MinHPInput.Text = tostring(SafeZoneConfig.MinHP)
     end
+    saveConfig()
 end)
 
 MaxHPInput.FocusLost:Connect(function()
@@ -1284,15 +1360,16 @@ MaxHPInput.FocusLost:Connect(function()
     else
         MaxHPInput.Text = tostring(SafeZoneConfig.MaxHP)
     end
+    saveConfig()
 end)
 
---// SERVER HOP BUTTON
 ServerHopBtn.MouseButton1Click:Connect(function()
     ServerHopConfig.Enabled = not ServerHopConfig.Enabled
     ServerHopBtn.Text = ServerHopConfig.Enabled and "Disable Auto Server Hop" or "Enable Auto Server Hop"
     TweenService:Create(ServerHopBtn, TweenInfo.new(0.25), {
         BackgroundColor3 = ServerHopConfig.Enabled and THEME.ButtonOn or THEME.ButtonOff
     }):Play()
+    saveConfig()
 end)
 
 MinPlayersInput.FocusLost:Connect(function()
@@ -1302,9 +1379,9 @@ MinPlayersInput.FocusLost:Connect(function()
     else
         MinPlayersInput.Text = tostring(ServerHopConfig.MinPlayers)
     end
+    saveConfig()
 end)
 
---// HOVER
 DockBtn.MouseEnter:Connect(function()
     TweenService:Create(DockBtn, TweenInfo.new(0.2), {BackgroundColor3 = THEME.ButtonOn}):Play()
 end)
@@ -1419,7 +1496,50 @@ task.spawn(function()
     ScanLabel.Text = "Scanning Players.. " .. total .. "/" .. total .. " ✓"
     task.wait(0.4)
 
-    StatusLabel.Text = "Loaded • AntiKick ON"
+    -- ✅ ЗАГРУЖАЕМ СОХРАНЁННЫЕ НАСТРОЙКИ
+    local saved = loadConfig()
+    if saved then
+        StatusLabel.Text = "Restoring settings..."
+        StatusLabel.TextColor3 = THEME.Accent
+        task.wait(0.6)
+        
+        if saved.AutoFarmEnabled then
+            AutoFarmEnabled = true
+            AutoFarmBtn.Text = "Disable AutoFarm"
+            AutoFarmBtn.BackgroundColor3 = THEME.ButtonOn
+        end
+        if saved.AutoAttackEnabled then
+            AutoAttackEnabled = true
+            AutoAttackBtn.Text = "Disable AutoAttack"
+            AutoAttackBtn.BackgroundColor3 = THEME.ButtonOn
+        end
+        if saved.SafeZoneEnabled then
+            SafeZoneConfig.Enabled = true
+            SafeZoneConfig.MinHP = saved.SafeZoneMinHP or 30
+            SafeZoneConfig.MaxHP = saved.SafeZoneMaxHP or 90
+            SafeZoneBtn.Text = "Disable Auto Safe Zone"
+            SafeZoneBtn.BackgroundColor3 = THEME.ButtonOn
+            MinHPInput.Text = tostring(SafeZoneConfig.MinHP)
+            MaxHPInput.Text = tostring(SafeZoneConfig.MaxHP)
+        end
+        if saved.ServerHopEnabled then
+            ServerHopConfig.Enabled = true
+            ServerHopConfig.MinPlayers = saved.ServerHopMinPlayers or 3
+            ServerHopBtn.Text = "Disable Auto Server Hop"
+            ServerHopBtn.BackgroundColor3 = THEME.ButtonOn
+            MinPlayersInput.Text = tostring(ServerHopConfig.MinPlayers)
+        end
+        
+        StatusLabel.Text = "Settings restored ✓"
+        StatusLabel.TextColor3 = THEME.Green
+        task.wait(0.5)
+        
+        if AutoFarmEnabled or AutoAttackEnabled then
+            switchTarget()
+        end
+    end
+
+    StatusLabel.Text = "Loaded • AntiKick ON • AutoRejoin"
     StatusLabel.TextColor3 = THEME.Green
 
     tween(AutoFarmBtn, 0.5, {TextTransparency = 0, BackgroundTransparency = 0}):Play()
@@ -1431,7 +1551,7 @@ task.spawn(function()
     tween(TargetDropdown, 0.5, {TextTransparency = 0, BackgroundTransparency = 0}):Play()
     tween(DDStroke, 0.5, {Transparency = 0.3}):Play()
     tween(DDArrow, 0.5, {TextTransparency = 0}):Play()
-    
+
     tween(SafeZoneTitle, 0.5, {TextTransparency = 0}):Play()
     tween(SafeZoneBtn, 0.5, {TextTransparency = 0, BackgroundTransparency = 0}):Play()
     tween(SafeZoneStroke, 0.5, {Transparency = 0.3}):Play()
@@ -1441,14 +1561,14 @@ task.spawn(function()
     tween(MaxHPLabel, 0.5, {TextTransparency = 0}):Play()
     tween(MaxHPInput, 0.5, {TextTransparency = 0, BackgroundTransparency = 0}):Play()
     tween(MaxHPStroke, 0.5, {Transparency = 0.3}):Play()
-    
+
     tween(ServerHopTitle, 0.5, {TextTransparency = 0}):Play()
     tween(ServerHopBtn, 0.5, {TextTransparency = 0, BackgroundTransparency = 0}):Play()
     tween(ServerHopStroke, 0.5, {Transparency = 0.3}):Play()
     tween(MinPlayersLabel, 0.5, {TextTransparency = 0}):Play()
     tween(MinPlayersInput, 0.5, {TextTransparency = 0, BackgroundTransparency = 0}):Play()
     tween(MinPlayersStroke, 0.5, {Transparency = 0.3}):Play()
-    
+
     tween(CreditLabel, 0.6, {TextTransparency = 0}):Play()
     tween(Footer, 0.5, {TextTransparency = 0}):Play()
     tween(CloseBtn, 0.5, {TextTransparency = 0, BackgroundTransparency = 0}):Play()
@@ -1458,10 +1578,10 @@ task.spawn(function()
 end)
 
 _G.JJS_CLEANUP = function()
+    pcall(function() saveConfig() end)
     pcall(function() ScreenGui:Destroy() end)
     pcall(function() TargetHud:Destroy() end)
 end
 
-print("[JJS Script v14] Loaded for " .. LocalPlayer.Name)
-print("[JJS Script v14] Made by Xyqwerq")
-print("[JJS Script v14] AutoFarm v12 logic + Pathfinding + SafeZone + ServerHop")
+print("[JJS Script v15] Loaded for " .. LocalPlayer.Name)
+print("[JJS Script v15] Made by Xyqwerq | AutoRejoin + Persistent Settings")
