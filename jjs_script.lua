@@ -1,6 +1,6 @@
 --// ============================================
---// JJS Script v8 for Delta Executor
---// + Working AutoFarm | + Fully Rounded UI | + Mobile
+--// JJS Script v9 for Delta Executor
+--// + WORKING AutoFarm (CFrame-stepping) | + AntiKick
 --// Made by Xyqwerq
 --// ============================================
 
@@ -15,11 +15,10 @@ local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
-local PathfindingService = game:GetService("PathfindingService")
 local LocalPlayer = Players.LocalPlayer
 local Mouse = LocalPlayer:GetMouse()
 
---// ============ НАСТРОЙКИ ЦВЕТОВ ============
+--// ============ ЦВЕТА ============
 local THEME = {
     Background   = Color3.fromRGB(35, 35, 40),
     BackgroundDark = Color3.fromRGB(28, 28, 33),
@@ -36,23 +35,19 @@ local THEME = {
 }
 
 local HOTKEY = Enum.KeyCode.RightShift
-
---// ============ 📱 КОМПАКТНЫЕ РАЗМЕРЫ ============
 local GUI_W = 240
 local GUI_H = 350
 local MIN_WIDTH = 210
 local MIN_HEIGHT = 320
 
---// ============ НАСТРОЙКИ АВТОФАРМА ============
+--// ============ НАСТРОЙКИ AUTOFARM (CFrame-step) ============
 local CONFIG = {
-    FOLLOW_DISTANCE  = 5,
-    MAX_SPEED        = 75,
-    ACCEL            = 0.35,
-    DEADZONE         = 4,
-    REPATH_INTERVAL  = 0.35,
-    WAYPOINT_REACH   = 5,
-    JUMP_ON_STUCK    = true,
-    MAX_CHASE_DIST   = 250,   -- если цель дальше — стоим
+    FOLLOW_DISTANCE = 5,       -- насколько близко держаться
+    STEP_INTERVAL   = 0.05,    -- каждые 0.05 сек шаг (20 раз в сек — античит-френдли)
+    STEP_SPEED      = 0.35,    -- % от дистанции за шаг (0.35 = быстро, 0.15 = плавно)
+    MAX_STEP        = 3,       -- макс studs за один шаг (защита от резкого движения)
+    DEADZONE        = 4,       -- мёртвая зона около цели
+    JUMP_ON_STUCK   = true,
 }
 
 --// ============ УДАЛЯЕМ СТАРЫЕ GUI ============
@@ -63,7 +58,7 @@ for _, name in ipairs({"JJSScriptGui", "JJSTargetHud"}) do
 end
 
 --// ============================================
---// ГЛАВНОЕ GUI
+--// GUI
 --// ============================================
 local ScreenGui = Instance.new("ScreenGui")
 ScreenGui.Name = "JJSScriptGui"
@@ -77,7 +72,7 @@ MainFrame.Position = UDim2.new(0.5, -GUI_W/2, 0.5, -GUI_H/2)
 MainFrame.BackgroundColor3 = THEME.Background
 MainFrame.BackgroundTransparency = 1
 MainFrame.BorderSizePixel = 0
-MainFrame.ClipsDescendants = false   -- ✅ чтобы UIStroke не обрезался
+MainFrame.ClipsDescendants = false
 MainFrame.Parent = ScreenGui
 
 local MainCorner = Instance.new("UICorner")
@@ -88,29 +83,24 @@ local MainStroke = Instance.new("UIStroke")
 MainStroke.Color = THEME.Stroke
 MainStroke.Thickness = 1.5
 MainStroke.Transparency = 1
-MainStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
 MainStroke.Parent = MainFrame
 
---// Заголовок
 local DragBar = Instance.new("TextLabel")
 DragBar.Size = UDim2.new(1, -50, 0, 22)
-DragBar.Position = UDim2.new(0, 0, 0, 0)
 DragBar.BackgroundColor3 = THEME.BackgroundDark
 DragBar.BackgroundTransparency = 1
 DragBar.BorderSizePixel = 0
-DragBar.Text = "JJS Script v8"
+DragBar.Text = "JJS Script v9"
 DragBar.TextColor3 = THEME.Accent
 DragBar.Font = Enum.Font.GothamBold
 DragBar.TextSize = 11
 DragBar.TextTransparency = 1
 DragBar.Parent = MainFrame
 
---// Скругляем верх заголовка (чтобы не торчал квадратный угол)
 local DragBarCorner = Instance.new("UICorner")
 DragBarCorner.CornerRadius = UDim.new(0, 10)
 DragBarCorner.Parent = DragBar
 
---// КРЕСТИК
 local CloseBtn = Instance.new("TextButton")
 CloseBtn.Size = UDim2.new(0, 20, 0, 20)
 CloseBtn.Position = UDim2.new(1, -24, 0, 2)
@@ -135,7 +125,6 @@ CloseBtn.MouseLeave:Connect(function()
     TweenService:Create(CloseBtn, TweenInfo.new(0.15), {BackgroundColor3 = THEME.ButtonOff}):Play()
 end)
 
---// РЕСАЙЗ
 local resizing = false
 local resizeStart, resizeStartSize
 
@@ -185,7 +174,6 @@ ResizeHandle.InputBegan:Connect(function(input)
     end
 end)
 
---// ТЕКСТ
 local HelloLabel = Instance.new("TextLabel")
 HelloLabel.Size = UDim2.new(1, -20, 0, 26)
 HelloLabel.Position = UDim2.new(0, 10, 0, 28)
@@ -222,7 +210,6 @@ ScanLabel.TextTransparency = 1
 ScanLabel.TextXAlignment = Enum.TextXAlignment.Center
 ScanLabel.Parent = MainFrame
 
---// Разделитель
 local function makeSeparator(y)
     local sep = Instance.new("Frame")
     sep.Size = UDim2.new(1, -20, 0, 1)
@@ -235,7 +222,6 @@ local function makeSeparator(y)
 end
 local Sep1 = makeSeparator(90)
 
---// КНОПКИ
 local AutoFarmBtn = Instance.new("TextButton")
 AutoFarmBtn.Size = UDim2.new(1, -20, 0, 28)
 AutoFarmBtn.Position = UDim2.new(0, 10, 0, 100)
@@ -296,7 +282,6 @@ ToggleStatus.Parent = MainFrame
 
 local Sep2 = makeSeparator(184)
 
---// TARGET SELECTOR
 local TargetTitle = Instance.new("TextLabel")
 TargetTitle.Size = UDim2.new(1, -20, 0, 14)
 TargetTitle.Position = UDim2.new(0, 10, 0, 192)
@@ -371,7 +356,6 @@ UIListLayout.Padding = UDim.new(0, 2)
 UIListLayout.SortOrder = Enum.SortOrder.LayoutOrder
 UIListLayout.Parent = DropdownList
 
---// ⭐ CREDIT
 local CreditLabel = Instance.new("TextLabel")
 CreditLabel.Size = UDim2.new(1, 0, 0, 14)
 CreditLabel.Position = UDim2.new(0, 0, 1, -32)
@@ -384,12 +368,11 @@ CreditLabel.TextTransparency = 1
 CreditLabel.TextXAlignment = Enum.TextXAlignment.Center
 CreditLabel.Parent = MainFrame
 
---// ФУТЕР
 local Footer = Instance.new("TextLabel")
 Footer.Size = UDim2.new(1, 0, 0, 12)
 Footer.Position = UDim2.new(0, 0, 1, -18)
 Footer.BackgroundTransparency = 1
-Footer.Text = "[RightShift] • AntiKick ON • v8"
+Footer.Text = "[RightShift] • AntiKick ON • v9"
 Footer.TextColor3 = Color3.fromRGB(120, 120, 130)
 Footer.Font = Enum.Font.Gotham
 Footer.TextSize = 9
@@ -397,9 +380,7 @@ Footer.TextTransparency = 1
 Footer.TextXAlignment = Enum.TextXAlignment.Center
 Footer.Parent = MainFrame
 
---// ============================================
---// DOCK BUTTON
---// ============================================
+--// DOCK
 local DockBtn = Instance.new("TextButton")
 DockBtn.Size = UDim2.new(0, 42, 0, 42)
 DockBtn.Position = UDim2.new(0, 15, 0.5, -21)
@@ -425,9 +406,7 @@ DockStroke.Thickness = 1.5
 DockStroke.Transparency = 1
 DockStroke.Parent = DockBtn
 
---// ============================================
---// TARGET HUD
---// ============================================
+--// HUD
 local TargetHud = Instance.new("ScreenGui")
 TargetHud.Name = "JJSTargetHud"
 TargetHud.ResetOnSpawn = false
@@ -555,15 +534,7 @@ local function switchTarget()
             return
         end
     end
-    -- Auto: ищем ближайшего
-    local nearest = getNearestPlayer()
-    if nearest then
-        CurrentTarget = nearest
-        return
-    end
-    -- Фолбэк: любой живой
-    local alive = getAlivePlayers()
-    CurrentTarget = alive[1]
+    CurrentTarget = getNearestPlayer() or getAlivePlayers()[1]
 end
 
 local function updateHud()
@@ -609,79 +580,17 @@ task.spawn(function()
 end)
 
 --// ============================================
---// 🚀 AUTOFARM — РАБОЧАЯ ВЕРСИЯ
+--// 🚀 AUTOFARM v9 — CFrame STEPPING
 --// ============================================
-local followAttachment, followVelocity
-local currentPath = nil
-local currentWaypointIndex = 1
-local lastRepathTime = 0
+-- Двигаем персонажа МАЛЕНЬКИМИ шагами через CFrame
+-- Не телепорт, а имитация ходьбы — античит не ловит
+
 local stuckTimer = 0
 local lastPos = nil
 
-local function cleanupVelocity()
-    if followVelocity then
-        pcall(function() followVelocity:Destroy() end)
-        followVelocity = nil
-    end
-    if followAttachment then
-        pcall(function() followAttachment:Destroy() end)
-        followAttachment = nil
-    end
-    currentPath = nil
-    currentWaypointIndex = 1
-end
-
-local function setupVelocity()
-    cleanupVelocity()
-    local myChar = LocalPlayer.Character
-    if not myChar then return end
-    local myRoot = myChar:FindFirstChild("HumanoidRootPart")
-    if not myRoot then return end
-
-    -- ✅ Используем BodyVelocity — он работает стабильнее в Delta
-    followVelocity = Instance.new("BodyVelocity")
-    followVelocity.MaxForce = Vector3.new(math.huge, math.huge, math.huge)
-    followVelocity.Velocity = Vector3.zero
-    followVelocity.P = 1250
-    followVelocity.Parent = myRoot
-end
-
-local function setVelocity(v)
-    if not followVelocity then return end
-    followVelocity.Velocity = v
-end
-
-local function getVelocity()
-    if not followVelocity then return Vector3.zero end
-    return followVelocity.Velocity
-end
-
-local function computePath(fromPos, toPos)
-    local path = PathfindingService:CreatePath({
-        AgentRadius = 3,
-        AgentHeight = 5,
-        AgentCanJump = true,
-        AgentCanClimb = true,
-        WaypointSpacing = 6,
-    })
-    local ok = pcall(function()
-        path:ComputeAsync(fromPos, toPos)
-    end)
-    if ok and path.Status == Enum.PathStatus.Success then
-        return path
-    end
-    return nil
-end
-
 local function positionBehindTarget()
-    if not AutoFarmEnabled then
-        cleanupVelocity()
-        return
-    end
-    if not CurrentTarget or not CurrentTarget.Character then
-        cleanupVelocity()
-        return
-    end
+    if not AutoFarmEnabled then return end
+    if not CurrentTarget or not CurrentTarget.Character then return end
 
     local myChar = LocalPlayer.Character
     if not myChar then return end
@@ -691,104 +600,36 @@ local function positionBehindTarget()
     if myHum.Health <= 0 then return end
 
     local targetRoot = CurrentTarget.Character:FindFirstChild("HumanoidRootPart")
-    if not targetRoot then
-        cleanupVelocity()
-        return
-    end
-
-    -- ✅ Пересоздаём velocity если потерялся
-    if not followVelocity or not followVelocity.Parent then
-        setupVelocity()
-    end
-    if not followVelocity then return end
+    if not targetRoot then return end
 
     local myPos = myRoot.Position
     local targetPos = targetRoot.Position
-    local dist = (targetPos - myPos).Magnitude
 
-    -- Если цель слишком далеко — стоим
-    if dist > CONFIG.MAX_CHASE_DIST then
-        setVelocity(Vector3.zero)
-        return
-    end
+    -- Считаем дистанцию до позиции сзади
+    local behindCF = targetRoot.CFrame * CFrame.new(0, 0, CONFIG.FOLLOW_DISTANCE)
+    local behindPos = behindCF.Position
+    local dist = (behindPos - myPos).Magnitude
 
-    -- ✅ Позиция сзади цели
-    local behindPos = targetRoot.CFrame * CFrame.new(0, 0, CONFIG.FOLLOW_DISTANCE)
-
-    -- ✅ ВСЕГДА используем pathfinding если дистанция > 15 (не только при 20+)
-    if dist > 15 then
-        local now = tick()
-        if now - lastRepathTime > CONFIG.REPATH_INTERVAL or not currentPath then
-            lastRepathTime = now
-            currentPath = computePath(myPos, behindPos.Position)
-            currentWaypointIndex = 1
-        end
-
-        if currentPath then
-            local waypoints = currentPath:GetWaypoints()
-            if currentWaypointIndex <= #waypoints then
-                local wp = waypoints[currentWaypointIndex]
-                if wp then
-                    if wp.Action == Enum.PathWaypointAction.Jump then
-                        pcall(function() myHum.Jump = true end)
-                    end
-
-                    local wpPos = wp.Position
-                    local toWp = wpPos - myPos
-                    local dWp = toWp.Magnitude
-
-                    if dWp < CONFIG.WAYPOINT_REACH then
-                        currentWaypointIndex = currentWaypointIndex + 1
-                        return
-                    end
-
-                    local dir = toWp.Unit
-                    local speed = math.clamp(dWp * 4, 25, CONFIG.MAX_SPEED)
-                    local desired = dir * speed
-                    setVelocity(getVelocity():Lerp(desired, CONFIG.ACCEL))
-
-                    -- Anti-stuck
-                    if lastPos and (myPos - lastPos).Magnitude < 0.3 then
-                        stuckTimer = stuckTimer + 0.05
-                        if stuckTimer > 0.6 then
-                            pcall(function() myHum.Jump = true end)
-                            currentPath = nil
-                            stuckTimer = 0
-                        end
-                    else
-                        stuckTimer = 0
-                    end
-                    lastPos = myPos
-                    return
-                end
-            else
-                currentPath = nil
-            end
-        end
-
-        -- Фолбэк — прямое движение если pathfinding не сработал
-        local dir = (behindPos.Position - myPos).Unit
-        setVelocity(getVelocity():Lerp(dir * CONFIG.MAX_SPEED, CONFIG.ACCEL))
-        return
-    end
-
-    -- Цель близко — прямое движение
-    local toTarget = behindPos.Position - myPos
-    local d = toTarget.Magnitude
-    if d < CONFIG.DEADZONE then
-        setVelocity(Vector3.zero)
+    -- Мёртвая зона — стоим
+    if dist < CONFIG.DEADZONE then
         stuckTimer = 0
         return
     end
-    local dir = toTarget.Unit
-    local speed = math.clamp(d * 5, 25, CONFIG.MAX_SPEED)
-    local desired = dir * speed
-    setVelocity(getVelocity():Lerp(desired, CONFIG.ACCEL))
 
-    -- Anti-stuck для близкой цели
+    -- ✅ ГЛАВНОЕ: маленький шаг к цели (не больше MAX_STEP studs)
+    local direction = (behindPos - myPos).Unit
+    local stepSize = math.min(dist * CONFIG.STEP_SPEED, CONFIG.MAX_STEP)
+    local newPos = myPos + direction * stepSize
+
+    -- ✅ Двигаем через CFrame с сохранением поворота
+    -- НЕ трогаем Y (высота) — пусть физика сама справляется
+    local newCF = CFrame.new(newPos, Vector3.new(targetPos.X, newPos.Y, targetPos.Z))
+    myRoot.CFrame = newCF
+
+    -- Anti-stuck: если стоим на месте — прыгаем
     if CONFIG.JUMP_ON_STUCK then
-        if lastPos and (myPos - lastPos).Magnitude < 0.5 then
-            stuckTimer = stuckTimer + 0.05
+        if lastPos and (myPos - lastPos).Magnitude < 0.3 then
+            stuckTimer = stuckTimer + CONFIG.STEP_INTERVAL
             if stuckTimer > 0.5 then
                 pcall(function() myHum.Jump = true end)
                 stuckTimer = 0
@@ -802,18 +643,18 @@ end
 
 LocalPlayer.CharacterAdded:Connect(function()
     task.wait(1)
-    if AutoFarmEnabled then
-        setupVelocity()
-    end
+    stuckTimer = 0
+    lastPos = nil
 end)
 
 task.spawn(function()
     while true do
         if AutoFarmEnabled then
             positionBehindTarget()
-            task.wait(0.03)
+            task.wait(CONFIG.STEP_INTERVAL)
         else
-            cleanupVelocity()
+            stuckTimer = 0
+            lastPos = nil
             task.wait(0.2)
         end
     end
@@ -862,9 +703,7 @@ task.spawn(function()
     end
 end)
 
---// ============================================
---// 🛡️ ANTIKICK
---// ============================================
+--// ANTIKICK
 local antiKickEnabled = true
 
 LocalPlayer.Idled:Connect(function()
@@ -900,28 +739,7 @@ if mt then
     setreadonly(mt, true)
 end
 
-task.spawn(function()
-    while antiKickEnabled do
-        task.wait(1)
-        local char = LocalPlayer.Character
-        if char then
-            local hrp = char:FindFirstChild("HumanoidRootPart")
-            if hrp then
-                for _, v in ipairs(hrp:GetChildren()) do
-                    if v:IsA("BodyVelocity") or v:IsA("BodyAngularVelocity") then
-                        if v ~= followVelocity then
-                            pcall(function() v:Destroy() end)
-                        end
-                    end
-                end
-            end
-        end
-    end
-end)
-
---// ============================================
 --// СКРЫТИЕ / ПОКАЗ
---// ============================================
 local GuiHidden = false
 
 local function hideGui()
@@ -965,7 +783,6 @@ end
 
 CloseBtn.MouseButton1Click:Connect(hideGui)
 
---// Перетаскивание
 local dragging, dragInput, dragStart, startPos
 local dockDragging, dockDragInput, dockDragStart, dockStartPos, dockMoved
 local hudDragging, hudDragInput, hudDragStart, hudStartPos
@@ -1056,7 +873,6 @@ UserInputService.InputBegan:Connect(function(input, processed)
     end
 end)
 
---// Кнопки
 local function refreshStatus()
     ToggleStatus.Text = "AutoFarm: " .. (AutoFarmEnabled and "ON" or "OFF") ..
                         " | AutoAttack: " .. (AutoAttackEnabled and "ON" or "OFF")
@@ -1069,12 +885,7 @@ AutoFarmBtn.MouseButton1Click:Connect(function()
     TweenService:Create(AutoFarmBtn, TweenInfo.new(0.25), {
         BackgroundColor3 = AutoFarmEnabled and THEME.ButtonOn or THEME.ButtonOff
     }):Play()
-    if AutoFarmEnabled then
-        if not CurrentTarget then switchTarget() end
-        setupVelocity()
-    else
-        cleanupVelocity()
-    end
+    if AutoFarmEnabled and not CurrentTarget then switchTarget() end
     refreshStatus()
 end)
 
@@ -1235,10 +1046,9 @@ task.spawn(function()
 end)
 
 _G.JJS_CLEANUP = function()
-    pcall(function() cleanupVelocity() end)
     pcall(function() ScreenGui:Destroy() end)
     pcall(function() TargetHud:Destroy() end)
 end
 
-print("[JJS Script v8] Loaded for " .. LocalPlayer.Name)
-print("[JJS Script v8] Made by Xyqwerq")
+print("[JJS Script v9] Loaded for " .. LocalPlayer.Name)
+print("[JJS Script v9] Made by Xyqwerq | CFrame-stepping AutoFarm")
