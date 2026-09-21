@@ -1,10 +1,10 @@
 --// ============================================
---// JJS Script v15.4 for Delta Executor
---// + Fixed Hover | + Big ServerHop + Retry | + Scrollable GUI
+--// JJS Script v15.5 for Delta Executor
+--// + SafeZone (anti-cheat safe) | + Big ServerHop
 --// Made by Xyqwerq
 --// ============================================
 
---// ============ FORCE CLEANUP OLD FLAGS ============
+--// ============ FORCE CLEANUP ============
 if _G.JJS_SCRIPT_LOADED then
     warn("[JJS] Cleaning old instance...")
     pcall(function()
@@ -53,15 +53,10 @@ local GUI_H = 400
 local MIN_WIDTH = 220
 local MIN_HEIGHT = 250
 
---// ============ AUTO-FIT SCREEN ============
 do
     local viewport = workspace.CurrentCamera.ViewportSize
-    if GUI_H > viewport.Y - 80 then
-        GUI_H = viewport.Y - 80
-    end
-    if GUI_W > viewport.X - 40 then
-        GUI_W = viewport.X - 40
-    end
+    if GUI_H > viewport.Y - 80 then GUI_H = viewport.Y - 80 end
+    if GUI_W > viewport.X - 40 then GUI_W = viewport.X - 40 end
 end
 
 --// ============ CONFIG PATHS ============
@@ -76,10 +71,6 @@ pcall(function()
         hasFileSystem = true
     end
 end)
-
-if not hasFileSystem then
-    warn("[JJS] File system not available. Settings won't persist.")
-end
 
 --// ============ CONFIGS ============
 local CONFIG = {
@@ -97,9 +88,12 @@ local SafeZoneConfig = {
     Enabled = false,
     MinHP   = 30,
     MaxHP   = 90,
-    Position = Vector3.new(0, -500, 0),
+    YOffset = -40,          -- ✅ НЕ -500, а -40 (под картой но не слишком далеко)
     InSafeZone = false,
     ReturnPos = nil,
+    ReturnVelocity = nil,
+    BV = nil,               -- BodyVelocity для плавного движения
+    BP = nil,               -- BodyPosition для удержания
 }
 
 local ServerHopConfig = {
@@ -189,7 +183,7 @@ DragBar.Size = UDim2.new(1, -50, 0, 22)
 DragBar.BackgroundColor3 = THEME.BackgroundDark
 DragBar.BackgroundTransparency = 1
 DragBar.BorderSizePixel = 0
-DragBar.Text = "JJS Script v15.4"
+DragBar.Text = "JJS Script v15.5"
 DragBar.TextColor3 = THEME.Accent
 DragBar.Font = Enum.Font.GothamBold
 DragBar.TextSize = 11
@@ -338,7 +332,6 @@ local function makeSeparator(y)
     return sep
 end
 
--- ✅ makeButton БЕЗ встроенного hover (hover добавляется отдельно с учётом состояния)
 local function makeButton(text, y, height)
     local btn = Instance.new("TextButton")
     btn.Size = UDim2.new(1, -20, 0, height or 28)
@@ -513,7 +506,7 @@ local Footer = Instance.new("TextLabel")
 Footer.Size = UDim2.new(1, 0, 0, 12)
 Footer.Position = UDim2.new(0, 0, 1, -18)
 Footer.BackgroundTransparency = 1
-Footer.Text = "[RightShift] Hide • v15.4"
+Footer.Text = "[RightShift] Hide • v15.5"
 Footer.TextColor3 = Color3.fromRGB(120, 120, 130)
 Footer.Font = Enum.Font.Gotham
 Footer.TextSize = 9
@@ -547,9 +540,7 @@ DockStroke.Thickness = 1.5
 DockStroke.Transparency = 1
 DockStroke.Parent = DockBtn
 
---// ============================================
---// ✅ HOVER EFFECTS (все кнопки, с состоянием)
---// ============================================
+--// HOVER
 local function addStateHover(btn, getState)
     btn.MouseEnter:Connect(function()
         local on = getState()
@@ -565,7 +556,6 @@ local function addStateHover(btn, getState)
     end)
 end
 
--- ✅ Подключаем hover ко ВСЕМ toggle-кнопкам с учётом их состояния
 addStateHover(AutoFarmBtn, function() return AutoFarmEnabled end)
 addStateHover(AutoAttackBtn, function() return AutoAttackEnabled end)
 addStateHover(SafeZoneBtn, function() return SafeZoneConfig.Enabled end)
@@ -989,11 +979,101 @@ task.spawn(function()
     end
 end)
 
---// AUTO SAFE ZONE
+--// ============================================
+--// 🛡️ AUTO SAFE ZONE — Anti-Cheat Safe Method
+--// ============================================
+-- ✅ Принцип: НЕ телепорт! Спускаемся плавно через BodyPosition
+--    с gradual Y-сдвигом — античит видит просто падение
+
+local function enterSafeZone()
+    local myChar = LocalPlayer.Character
+    if not myChar then return end
+    local myRoot = myChar:FindFirstChild("HumanoidRootPart")
+    if not myRoot then return end
+    
+    -- Запоминаем позицию возврата
+    SafeZoneConfig.ReturnPos = myRoot.CFrame
+    
+    -- ✅ Целевая позиция — ниже на YOffset от текущей (не в пустоту -500!)
+    local targetPos = myRoot.Position + Vector3.new(0, SafeZoneConfig.YOffset, 0)
+    
+    -- ✅ Создаём BodyPosition для плавного движения
+    local bp = Instance.new("BodyPosition")
+    bp.MaxForce = Vector3.new(0, math.huge, 0)  -- ✅ Только по Y!
+    bp.P = 8000
+    bp.D = 500
+    bp.Position = targetPos
+    bp.Name = "JJS_SafeZone_BP"
+    bp.Parent = myRoot
+    SafeZoneConfig.BP = bp
+    
+    -- ✅ Отключаем гравитацию через BodyForce (компенсируем)
+    local bf = Instance.new("BodyForce")
+    bf.Force = Vector3.new(0, workspace.Gravity * myRoot:GetMass(), 0)
+    bf.Name = "JJS_SafeZone_BF"
+    bf.Parent = myRoot
+    
+    SafeZoneConfig.InSafeZone = true
+    print("[JJS SafeZone] Entered safe zone (HP: " .. math.floor(myRoot.Parent.Humanoid.Health) .. ")")
+end
+
+local function exitSafeZone()
+    local myChar = LocalPlayer.Character
+    if not myChar then return end
+    local myRoot = myChar:FindFirstChild("HumanoidRootPart")
+    if not myRoot then return end
+    
+    -- ✅ Возвращаемся через BodyPosition обратно
+    if SafeZoneConfig.ReturnPos then
+        local rp = SafeZoneConfig.ReturnPos
+        local bp = myRoot:FindFirstChild("JJS_SafeZone_BP")
+        
+        if bp then
+            bp.Position = rp.Position
+            -- Даём время долететь
+            task.wait(0.8)
+        else
+            -- Fallback
+            myRoot.CFrame = rp
+        end
+    end
+    
+    -- Убираем физику
+    pcall(function()
+        local bp = myRoot:FindFirstChild("JJS_SafeZone_BP")
+        if bp then bp:Destroy() end
+        local bf = myRoot:FindFirstChild("JJS_SafeZone_BF")
+        if bf then bf:Destroy() end
+    end)
+    
+    SafeZoneConfig.BP = nil
+    SafeZoneConfig.InSafeZone = false
+    SafeZoneConfig.ReturnPos = nil
+    print("[JJS SafeZone] Exited safe zone")
+end
+
+local function cleanupSafeZone()
+    local myChar = LocalPlayer.Character
+    if not myChar then return end
+    local myRoot = myChar:FindFirstChild("HumanoidRootPart")
+    if not myRoot then return end
+    pcall(function()
+        local bp = myRoot:FindFirstChild("JJS_SafeZone_BP")
+        if bp then bp:Destroy() end
+        local bf = myRoot:FindFirstChild("JJS_SafeZone_BF")
+        if bf then bf:Destroy() end
+    end)
+    SafeZoneConfig.InSafeZone = false
+    SafeZoneConfig.BP = nil
+end
+
 task.spawn(function()
     while true do
         task.wait(0.5)
-        if not SafeZoneConfig.Enabled then continue end
+        if not SafeZoneConfig.Enabled then
+            if SafeZoneConfig.InSafeZone then cleanupSafeZone() end
+            continue
+        end
         
         local myChar = LocalPlayer.Character
         if not myChar then continue end
@@ -1001,53 +1081,26 @@ task.spawn(function()
         local myHum = myChar:FindFirstChildOfClass("Humanoid")
         if not myRoot or not myHum then continue end
         if myHum.Health <= 0 then
-            SafeZoneConfig.InSafeZone = false
+            cleanupSafeZone()
             continue
         end
         
+        -- ✅ Проверка на низкое HP
         if not SafeZoneConfig.InSafeZone and myHum.Health <= SafeZoneConfig.MinHP then
-            SafeZoneConfig.ReturnPos = myRoot.CFrame
-            SafeZoneConfig.InSafeZone = true
-            
-            pcall(function()
-                myRoot.CFrame = CFrame.new(SafeZoneConfig.Position)
-            end)
-            
-            pcall(function()
-                local existing = myRoot:FindFirstChild("JJS_SafeZone")
-                if existing then existing:Destroy() end
-                local bv = Instance.new("BodyPosition")
-                bv.Position = SafeZoneConfig.Position
-                bv.MaxForce = Vector3.new(math.huge, math.huge, math.huge)
-                bv.P = 10000
-                bv.Name = "JJS_SafeZone"
-                bv.Parent = myRoot
-            end)
-            
-            print("[JJS] HP low → entered safe zone")
+            enterSafeZone()
         end
         
+        -- ✅ Проверка на восстановление
         if SafeZoneConfig.InSafeZone and myHum.Health >= SafeZoneConfig.MaxHP then
-            pcall(function()
-                local bv = myRoot:FindFirstChild("JJS_SafeZone")
-                if bv then bv:Destroy() end
-            end)
-            
-            if SafeZoneConfig.ReturnPos then
-                pcall(function()
-                    myRoot.CFrame = SafeZoneConfig.ReturnPos
-                end)
-            end
-            
-            SafeZoneConfig.InSafeZone = false
-            SafeZoneConfig.ReturnPos = nil
-            print("[JJS] HP restored → returning from safe zone")
+            exitSafeZone()
         end
         
+        -- ✅ Удерживаем позицию (только если BodyPosition потерялся)
         if SafeZoneConfig.InSafeZone then
-            pcall(function()
-                myRoot.CFrame = CFrame.new(SafeZoneConfig.Position)
-            end)
+            if not myRoot:FindFirstChild("JJS_SafeZone_BP") then
+                -- Пересоздаём если потерялся
+                enterSafeZone()
+            end
         end
     end
 end)
@@ -1055,8 +1108,6 @@ end)
 --// ============================================
 --// 🌐 AUTO SERVER HOP — Big servers + Retry
 --// ============================================
-
--- ✅ Получить список серверов с игроками
 local function getServerList()
     local servers = {}
     local placeId = game.PlaceId
@@ -1068,7 +1119,6 @@ local function getServerList()
     
     if ok and result and result.data then
         for _, server in ipairs(result.data) do
-            -- ✅ Только серверы с игроками и не полные
             if server.playing and server.playing > 1 
                and server.playing < server.maxPlayers 
                and server.id ~= game.JobId then
@@ -1081,7 +1131,6 @@ local function getServerList()
         end
     end
     
-    -- ✅ Сортируем по количеству игроков (сначала самые большие)
     table.sort(servers, function(a, b)
         return a.playing > b.playing
     end)
@@ -1089,7 +1138,6 @@ local function getServerList()
     return servers
 end
 
--- ✅ Попытка телепорта на лучший сервер
 local function attemptServerHop()
     local servers = getServerList()
     
@@ -1101,7 +1149,6 @@ local function attemptServerHop()
         return false
     end
     
-    -- ✅ Берём один из ТОП-5 самых больших серверов
     local poolSize = math.min(#servers, 5)
     local chosen = servers[math.random(1, poolSize)]
     
@@ -1122,7 +1169,6 @@ local function attemptServerHop()
     return success
 end
 
--- ✅ Schedule rejoin queue перед телепортом
 local function scheduleRejoinQueue()
     pcall(saveConfig)
     
@@ -1169,7 +1215,6 @@ local function scheduleRejoinQueue()
     end
 end
 
--- ✅ Основной цикл ServerHop с retry
 task.spawn(function()
     while true do
         task.wait(ServerHopConfig.CheckInterval)
@@ -1189,7 +1234,6 @@ task.spawn(function()
             
             pcall(function() attemptServerHop() end)
             
-            -- ✅ Ждём 5 сек и проверяем — случился ли телепорт
             task.wait(5)
             
             if game.JobId == oldJobId then
@@ -1425,15 +1469,7 @@ SafeZoneBtn.MouseButton1Click:Connect(function()
         BackgroundColor3 = SafeZoneConfig.Enabled and THEME.ButtonOn or THEME.ButtonOff
     }):Play()
     if not SafeZoneConfig.Enabled then
-        SafeZoneConfig.InSafeZone = false
-        local myChar = LocalPlayer.Character
-        if myChar then
-            local myRoot = myChar:FindFirstChild("HumanoidRootPart")
-            if myRoot then
-                local bv = myRoot:FindFirstChild("JJS_SafeZone")
-                if bv then bv:Destroy() end
-            end
-        end
+        cleanupSafeZone()
     end
     pcall(saveConfig)
 end)
@@ -1674,14 +1710,10 @@ end)
 
 _G.JJS_CLEANUP = function()
     pcall(function() saveConfig() end)
+    pcall(function() cleanupSafeZone() end)
     pcall(function() ScreenGui:Destroy() end)
     pcall(function() TargetHud:Destroy() end)
 end
 
-print("[JJS Script v15.4] Loaded for " .. LocalPlayer.Name)
-print("[JJS Script v15.4] Made by Xyqwerq")
-if hasFileSystem then
-    print("[JJS] File system: OK")
-else
-    print("[JJS] File system: NOT AVAILABLE")
-end
+print("[JJS Script v15.5] Loaded for " .. LocalPlayer.Name)
+print("[JJS Script v15.5] Made by Xyqwerq")
