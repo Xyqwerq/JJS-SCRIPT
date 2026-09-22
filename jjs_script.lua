@@ -1,6 +1,6 @@
 --// ============================================
---// JJS Script v19 for Delta Executor
---// + Fast AutoAttack (F/Q/G keys) | + Fast Movement
+--// JJS Script v20 for Delta Executor
+--// + Smart Q (5s cd) | + F Hold 3s | + G Spam x3
 --// Made by Xyqwerq
 --// ============================================
 
@@ -87,12 +87,20 @@ local CONFIG = {
 
 -- ✅ ATTACK CONFIG
 local AttackConfig = {
-    SpamDelay = 0.05,       -- 20 циклов в секунду
-    UseRemote = true,       -- использовать remote'ы
-    UseClick = true,        -- спам ЛКМ (без движения мыши)
-    UseKeys = true,         -- нажимать 1,2,3,4
-    UseTools = true,        -- активировать Tool'ы
-    UseCombatKeys = true,   -- ✅ Q, G каждый цикл + F иногда
+    SpamDelay = 0.05,
+    UseRemote = true,
+    UseClick = true,
+    UseKeys = true,
+    UseTools = true,
+    UseCombatKeys = true,
+}
+
+-- ✅ COMBAT KEYS CONFIG (v20)
+local CombatKeysConfig = {
+    Q_Cooldown = 5.0,       -- ✅ Q кулдаун 5 сек
+    F_Interval = 10.0,      -- ✅ F каждые 10 сек
+    F_HoldTime = 3.0,       -- ✅ F зажимается на 3 сек
+    G_SpamCount = 3,        -- ✅ G × 3 раза за цикл
 }
 
 -- ✅ TARGET LOCK
@@ -188,7 +196,7 @@ DragBar.Size = UDim2.new(1, -50, 0, 22)
 DragBar.BackgroundColor3 = THEME.BackgroundDark
 DragBar.BackgroundTransparency = 1
 DragBar.BorderSizePixel = 0
-DragBar.Text = "JJS Script v19"
+DragBar.Text = "JJS Script v20"
 DragBar.TextColor3 = THEME.Accent
 DragBar.Font = Enum.Font.GothamBold
 DragBar.TextSize = 11
@@ -492,7 +500,7 @@ local Footer = Instance.new("TextLabel")
 Footer.Size = UDim2.new(1, 0, 0, 12)
 Footer.Position = UDim2.new(0, 0, 1, -18)
 Footer.BackgroundTransparency = 1
-Footer.Text = "[RightShift] Hide • v19"
+Footer.Text = "[RightShift] Hide • v20"
 Footer.TextColor3 = Color3.fromRGB(120, 120, 130)
 Footer.Font = Enum.Font.Gotham
 Footer.TextSize = 9
@@ -923,32 +931,22 @@ task.spawn(function()
 end)
 
 --// ============================================
---// ⚔️ AUTOATTACK v19 — F, Q, G keys added
+--// ⚔️ AUTOATTACK v20 — Smart Q, F Hold, G x3
 --// ============================================
 
--- ✅ Клик через VirtualInputManager (НЕ двигает курсор!)
 local function spamClick()
     pcall(function()
         local vpSize = Camera.ViewportSize
         VirtualInputManager:SendMouseButtonEvent(
-            vpSize.X / 2, vpSize.Y / 2,
-            0,
-            true,
-            game,
-            0
+            vpSize.X / 2, vpSize.Y / 2, 0, true, game, 0
         )
         task.wait(0.01)
         VirtualInputManager:SendMouseButtonEvent(
-            vpSize.X / 2, vpSize.Y / 2,
-            0,
-            false,
-            game,
-            0
+            vpSize.X / 2, vpSize.Y / 2, 0, false, game, 0
         )
     end)
 end
 
--- ✅ Активация Tool'ов
 local function activateTools()
     local myChar = LocalPlayer.Character
     if not myChar then return end
@@ -959,7 +957,6 @@ local function activateTools()
     end
 end
 
--- ✅ Нажатие клавиш
 local function pressKey(keyCode)
     pcall(function()
         VirtualInputManager:SendKeyEvent(true, keyCode, false, game)
@@ -968,35 +965,60 @@ local function pressKey(keyCode)
     end)
 end
 
--- ✅ НОВОЕ: Спам Q, G + иногда F
-local fCounter = 0
-local function pressCombatKeys()
-    -- Q — каждый цикл (спам)
-    pcall(function()
-        VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.Q, false, game)
-        task.wait(0.01)
-        VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.Q, false, game)
-    end)
-    -- G — каждый цикл (спам)
-    pcall(function()
-        VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.G, false, game)
-        task.wait(0.01)
-        VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.G, false, game)
-    end)
-    
-    -- F — иногда (каждый 5-й цикл)
-    fCounter = fCounter + 1
-    if fCounter >= 5 then
-        fCounter = 0
+-- ✅ v20: Умный Q (5 сек кд)
+local lastQTime = 0
+local function smartQ()
+    local now = tick()
+    if now - lastQTime >= CombatKeysConfig.Q_Cooldown then
+        lastQTime = now
         pcall(function()
-            VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.F, false, game)
-            task.wait(0.01)
-            VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.F, false, game)
+            VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.Q, false, game)
+            task.wait(0.05)
+            VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.Q, false, game)
         end)
     end
 end
 
--- ✅ Вызов remote'ов атаки
+-- ✅ v20: F зажимается на 3 сек, каждые 10 сек
+local lastFTime = 0
+local fIsHolding = false
+local function smartF()
+    local now = tick()
+    if fIsHolding then return end
+    if now - lastFTime >= CombatKeysConfig.F_Interval then
+        lastFTime = now
+        fIsHolding = true
+        task.spawn(function()
+            pcall(function()
+                VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.F, false, game)
+                task.wait(CombatKeysConfig.F_HoldTime)
+                VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.F, false, game)
+            end)
+            fIsHolding = false
+            print("[JJS] F held " .. CombatKeysConfig.F_HoldTime .. "s")
+        end)
+    end
+end
+
+-- ✅ v20: G × 3 раза за цикл
+local function spamG()
+    for i = 1, CombatKeysConfig.G_SpamCount do
+        pcall(function()
+            VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.G, false, game)
+            task.wait(0.01)
+            VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.G, false, game)
+        end)
+    end
+end
+
+-- ✅ Комбинированная функция
+local function pressCombatKeys()
+    smartQ()
+    spamG()
+    smartF()
+end
+
+-- ✅ Remote'ы атаки
 local cachedAttackRemotes = nil
 local function getAttackRemotes()
     if cachedAttackRemotes then return cachedAttackRemotes end
@@ -1068,26 +1090,16 @@ local function tryAttack()
     end)
     task.wait(0.005)
 
-    -- Спамим всеми способами
-    if AttackConfig.UseClick then
-        spamClick()
-    end
-    if AttackConfig.UseTools then
-        activateTools()
-    end
-    if AttackConfig.UseRemote then
-        fireAttackRemotes()
-    end
+    if AttackConfig.UseClick then spamClick() end
+    if AttackConfig.UseTools then activateTools() end
+    if AttackConfig.UseRemote then fireAttackRemotes() end
     if AttackConfig.UseKeys then
         pressKey(Enum.KeyCode.One)
         pressKey(Enum.KeyCode.Two)
         pressKey(Enum.KeyCode.Three)
         pressKey(Enum.KeyCode.Four)
     end
-    -- ✅ Q, G каждый цикл + F иногда
-    if AttackConfig.UseCombatKeys then
-        pressCombatKeys()
-    end
+    if AttackConfig.UseCombatKeys then pressCombatKeys() end
 end
 
 task.spawn(function()
@@ -1569,7 +1581,7 @@ task.spawn(function()
         end
     end
 
-    StatusLabel.Text = "Loaded • v19"
+    StatusLabel.Text = "Loaded • v20"
     StatusLabel.TextColor3 = THEME.Green
 
     tween(AutoFarmBtn, 0.5, {TextTransparency = 0, BackgroundTransparency = 0}):Play()
@@ -1603,5 +1615,5 @@ _G.JJS_CLEANUP = function()
     pcall(function() TargetHud:Destroy() end)
 end
 
-print("[JJS Script v19] Loaded for " .. LocalPlayer.Name)
-print("[JJS Script v19] Made by Xyqwerq | F, Q, G keys added")
+print("[JJS Script v20] Loaded for " .. LocalPlayer.Name)
+print("[JJS Script v20] Made by Xyqwerq | Smart Q (5s) + F Hold (3s) + G spam x3")
